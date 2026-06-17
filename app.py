@@ -123,16 +123,17 @@ else:
 
     st.sidebar.markdown("---")
     
-    ticker = st.sidebar.text_input("Enter Ticker (e.g., BTC-USD, ETH-USD, AAPL):", value="ETH-USD")
-    timeframe = st.sidebar.selectbox("Select Timeframe:", options=["1m", "5m", "15m", "30m", "1h", "1d", "1wk"], index=4)
-    period = st.sidebar.selectbox("Select Period (Data Range):", options=["1d", "5d", "1mo", "3mo", "6mo", "1y", "max"], index=3)
+    ticker = st.sidebar.text_input("Enter Ticker (e.g., BTC-USD, ETH-USD, AAPL):", value="BTC-USD")
+    timeframe = st.sidebar.selectbox("Select Timeframe:", options=["1m", "5m", "15m", "30m", "1h", "1d", "1wk"], index=0) # Default 1m for ultra-live updates
+    period = st.sidebar.selectbox("Select Period (Data Range):", options=["1d", "5d", "1mo", "3mo", "6mo", "1y", "max"], index=0)
     
     st.sidebar.markdown("---")
-    refresh_rate = st.sidebar.slider("Live Refresh Interval (seconds):", min_value=2, max_value=30, value=5)
+    refresh_rate = st.sidebar.slider("Live Speed (seconds):", min_value=2, max_value=10, value=2)
 
     st.title("📊 Pro Trader Automated Chart Pattern & S&R Tool")
     st.write("### Advanced Multi-Indicator Technical Analysis Engine")
 
+    # The fragment updates only the chart UI block without losing input focus or scrolling state
     @st.fragment(run_every=refresh_rate)
     def render_live_chart_and_data(tk, tf, pr):
         if not tk.strip():
@@ -212,8 +213,8 @@ else:
                 x=close_series.index, open=open_series, high=high_series, low=low_series, close=close_series, name=tk
             ))
 
-            fig.add_trace(go.Scatter(x=close_series.index, y=upper_bb, line=dict(color='rgba(0, 255, 204, 0.2)', width=1.2, dash='dash'), name='Upper BB'))
-            fig.add_trace(go.Scatter(x=close_series.index, y=lower_bb, line=dict(color='rgba(0, 255, 204, 0.2)', width=1.2, dash='dash'), name='Lower BB'))
+            fig.add_trace(go.Scatter(x=close_series.index, y=upper_bb, line=dict(color='rgba(0, 255, 204, 0.15)', width=1.2, dash='dash'), name='Upper BB'))
+            fig.add_trace(go.Scatter(x=close_series.index, y=lower_bb, line=dict(color='rgba(0, 255, 204, 0.15)', width=1.2, dash='dash'), name='Lower BB'))
 
             fig.add_hline(y=r2, line_dash="dash", line_color="#00FF66", line_width=1.5, annotation_text=" R2 (Major Res)", annotation_position="top right")
             fig.add_hline(y=r1, line_dash="solid", line_color="#00CC52", line_width=1, annotation_text=" R1 (Minor Res)", annotation_position="top right")
@@ -223,7 +224,8 @@ else:
 
             fig.update_layout(
                 template="plotly_dark", paper_bgcolor="#0B0E14", plot_bgcolor="#0B0E14",
-                xaxis_rangeslider_visible=False, height=600, margin=dict(l=20, r=20, t=20, b=20)
+                xaxis_rangeslider_visible=False, height=600, margin=dict(l=20, r=20, t=20, b=20),
+                uirevision=tk # This prevents resetting user's zoom/pan position when ticks update!
             )
             st.plotly_chart(fig, use_container_width=True)
 
