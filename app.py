@@ -11,47 +11,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-st.markdown("""
-    <style>
-    /* Main Background */
-    .stApp {
-        background-color: #0B0E14 !important;
-        color: #E0E6ED !important;
-    }
-    /* Sidebar Dark Mode */
-    [data-testid="stSidebar"] {
-        background-color: #11151D !important;
-    }
-    /* Text Labels color to white */
-    label, .stWidgetLabel p {
-        color: #FFFFFF !important;
-        font-weight: 500 !important;
-    }
-    /* Input boxes background */
-    div[data-baseweb="input"], div[data-baseweb="select"], div[data-baseweb="textarea"] {
-        background-color: #1A1F2C !important;
-        border: 1px solid #2D3748 !important;
-    }
-    /* Input text color to white */
-    input, textarea, select {
-        color: #FFFFFF !important;
-        -webkit-text-fill-color: #FFFFFF !important;
-    }
-    /* Placeholder text color */
-    input::placeholder {
-        color: #A0AEC0 !important;
-    }
-    /* Tabs Style */
-    button[data-baseweb="tab"] {
-        color: #8A99AD !important;
-    }
-    button[aria-selected="true"] {
-        color: #00FFCC !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-
 def init_supabase() -> Client:
     url = st.secrets["SUPABASE_URL"]
     key = st.secrets["SUPABASE_KEY"]
@@ -76,8 +35,8 @@ if not st.session_state.logged_in:
     tab1, tab2 = st.tabs(["🔑 Login", "📝 Sign Up (Create Free Account)"])
 
     with tab1:
-        login_email = st.text_input("Email Address", key="login_email_input", placeholder="name@example.com")
-        login_password = st.text_input("Password", type="password", key="login_pw_input", placeholder="••••••••")
+        login_email = st.text_input("Email Address", key="login_email_input")
+        login_password = st.text_input("Password", type="password", key="login_pw_input")
         if st.button("Log In", use_container_width=True):
             try:
                 response = supabase.auth.sign_in_with_password({
@@ -92,8 +51,8 @@ if not st.session_state.logged_in:
                 st.error(f"Login Failed: {e}")
 
     with tab2:
-        signup_email = st.text_input("Enter Your Email Address", key="signup_email_input", placeholder="name@example.com")
-        signup_password = st.text_input("Enter Password", type="password", key="signup_pw_input", placeholder="Minimum 6 characters")
+        signup_email = st.text_input("Enter Your Email Address", key="signup_email_input")
+        signup_password = st.text_input("Enter Password", type="password", key="signup_pw_input")
         if st.button("Create Account", use_container_width=True):
             try:
                 response = supabase.auth.sign_up({
@@ -151,26 +110,18 @@ else:
                     else:
                         fig.add_trace(go.Scatter(x=data.index, y=data['Close'], mode='lines', name='Close Price'))
                     
-                    r2 = float(data['High'].quantile(0.92))
-                    r1 = float(data['High'].quantile(0.75))
-                    pivot = float(data['Close'].quantile(0.50))
-                    s1 = float(data['Low'].quantile(0.25))
-                    s2 = float(data['Low'].quantile(0.08))
-
-                    fig.add_hline(y=r2, line_dash="dash", line_color="#00FF66", line_width=1.5, annotation_text="Major Resistance (R2)", annotation_position="top left")
-                    fig.add_hline(y=r1, line_dash="dash", line_color="#00CC52", line_width=1, annotation_text="Minor Resistance (R1)", annotation_position="top left")
+                    max_price = float(data['Close'].max())
+                    min_price = float(data['Close'].min())
+                    avg_price = float(data['Close'].mean())
                     
-                    fig.add_hline(y=pivot, line_dash="dot", line_color="#FF9900", line_width=1, annotation_text="Market Pivot (PP)", annotation_position="top left")
-                    
-                    fig.add_hline(y=s1, line_dash="dash", line_color="#FF3333", line_width=1, annotation_text="Minor Support (S1)", annotation_position="bottom left")
-                    fig.add_hline(y=s2, line_dash="dash", line_color="#CC0000", line_width=1.5, annotation_text="Major Support (S2)", annotation_position="bottom left")
+                    fig.add_hline(y=max_price, line_dash="dash", line_color="green", annotation_text="Resistance")
+                    fig.add_hline(y=min_price, line_dash="dash", line_color="red", annotation_text="Support")
+                    fig.add_hline(y=avg_price, line_dash="dot", line_color="orange", annotation_text="Pivot")
 
                     fig.update_layout(
                         template="plotly_dark",
-                        paper_bgcolor="#0B0E14",
-                        plot_bgcolor="#0B0E14",
                         xaxis_rangeslider_visible=False,
-                        height=600,
+                        height=550,
                         margin=dict(l=20, r=20, t=20, b=20)
                     )
                     
