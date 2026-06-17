@@ -158,11 +158,17 @@ else:
                 elif len(close_series) < 30:
                     st.error("Not enough historical data bars to process technical math indicators. Please choose a wider period range.")
                 else:
-                    r2 = float(high_series.quantile(0.92))
-                    r1 = float(high_series.quantile(0.75))
-                    pivot = float(close_series.quantile(0.50))
-                    s1 = float(low_series.quantile(0.25))
-                    s2 = float(low_series.quantile(0.08))
+                    r2_series = high_series.rolling(window=20, min_periods=1).quantile(0.92)
+                    r1_series = high_series.rolling(window=20, min_periods=1).quantile(0.75)
+                    pivot_series = close_series.rolling(window=20, min_periods=1).quantile(0.50)
+                    s1_series = low_series.rolling(window=20, min_periods=1).quantile(0.25)
+                    s2_series = low_series.rolling(window=20, min_periods=1).quantile(0.08)
+
+                    r2 = float(r2_series.iloc[-1])
+                    r1 = float(r1_series.iloc[-1])
+                    pivot = float(pivot_series.iloc[-1])
+                    s1 = float(s1_series.iloc[-1])
+                    s2 = float(s2_series.iloc[-1])
 
                     delta = close_series.diff()
                     gain = (delta.where(delta > 0, 0)).ewm(span=14, adjust=False).mean()
@@ -185,8 +191,8 @@ else:
                     current_upper_bb = float(upper_bb.iloc[-1])
                     current_lower_bb = float(lower_bb.iloc[-1])
 
-                    sma9 = close_series.rolling(window=9).mean()
-                    sma21 = close_series.rolling(window=21).mean()
+                    sma9 = close_series.rolling(window=20).mean()
+                    sma21 = close_series.rolling(window=50).mean()
                     current_sma9 = float(sma9.iloc[-1])
                     current_sma21 = float(sma21.iloc[-1])
 
@@ -195,18 +201,18 @@ else:
                         x=close_series.index, open=open_series, high=high_series, low=low_series, close=close_series, name=ticker
                     ))
 
-                    fig.add_trace(go.Scatter(x=close_series.index, y=upper_bb, line=dict(color='rgba(0, 255, 204, 0.25)', width=1.5, dash='dash'), name='Upper Bollinger Band'))
-                    fig.add_trace(go.Scatter(x=close_series.index, y=lower_bb, line=dict(color='rgba(0, 255, 204, 0.25)', width=1.5, dash='dash'), name='Lower Bollinger Band'))
+                    fig.add_trace(go.Scatter(x=close_series.index, y=upper_bb, line=dict(color='rgba(0, 255, 204, 0.15)', width=1.5, dash='dash'), name='Upper BB'))
+                    fig.add_trace(go.Scatter(x=close_series.index, y=lower_bb, line=dict(color='rgba(0, 255, 204, 0.15)', width=1.5, dash='dash'), name='Lower BB'))
 
-                    fig.add_hline(y=r2, line_dash="dash", line_color="#00FF66", line_width=1.5, annotation_text="Major Resistance (R2)", annotation_position="top left")
-                    fig.add_hline(y=r1, line_dash="dash", line_color="#00CC52", line_width=1, annotation_text="Minor Resistance (R1)", annotation_position="top left")
-                    fig.add_hline(y=pivot, line_dash="dot", line_color="#FF9900", line_width=1, annotation_text="Market Pivot (PP)", annotation_position="top left")
-                    fig.add_hline(y=s1, line_dash="dash", line_color="#FF3333", line_width=1, annotation_text="Minor Support (S1)", annotation_position="bottom left")
-                    fig.add_hline(y=s2, line_dash="dash", line_color="#CC0000", line_width=1.5, annotation_text="Major Support (S2)", annotation_position="bottom left")
+                    fig.add_trace(go.Scatter(x=close_series.index, y=r2_series, line=dict(color="#00FF66", width=1.5, dash='dash'), name="Major Resistance (R2)"))
+                    fig.add_trace(go.Scatter(x=close_series.index, y=r1_series, line=dict(color="#00CC52", width=1), name="Minor Resistance (R1)"))
+                    fig.add_trace(go.Scatter(x=close_series.index, y=pivot_series, line=dict(color="#FF9900", width=1, dash='dot'), name="Market Pivot (PP)"))
+                    fig.add_trace(go.Scatter(x=close_series.index, y=s1_series, line=dict(color="#FF3333", width=1), name="Minor Support (S1)"))
+                    fig.add_trace(go.Scatter(x=close_series.index, y=s2_series, line=dict(color="#CC0000", width=1.5, dash='dash'), name="Major Support (S2)"))
 
                     fig.update_layout(
                         template="plotly_dark", paper_bgcolor="#0B0E14", plot_bgcolor="#0B0E14",
-                        xaxis_rangeslider_visible=False, height=500, margin=dict(l=20, r=20, t=20, b=20)
+                        xaxis_rangeslider_visible=False, height=550, margin=dict(l=20, r=20, t=20, b=20)
                     )
                     st.plotly_chart(fig, use_container_width=True)
 
