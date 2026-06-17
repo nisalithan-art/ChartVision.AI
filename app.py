@@ -1,167 +1,149 @@
 import streamlit as st
-import yfinance as yf
 import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
-from scipy.signal import find_peaks
+import yfinance as yf
 from supabase import create_client, Client
+import plotly.graph_objects as go
 
-st.set_page_config(page_title="Pro Trader AI-Less Tool", layout="wide")
-
-st.markdown(
-    """
-    <style>
-    .stApp { background-color: #0b0e14; color: #ecf0f1; }
-    h1, h2, h3 { color: #00ffcc !important; font-family: 'Helvetica Neue', Arial, sans-serif; }
-    .stButton>button { background-color: #00ffcc; color: #0b0e14; font-weight: bold; width: 100%; border-radius: 5px; }
-    .stButton>button:hover { background-color: #00cc99; color: #ffffff; }
-    .feedback-box { background-color: #11151c; padding: 20px; border-radius: 10px; border: 1px solid #232a36; margin-top: 30px; }
-    </style>
-    """,
-    unsafe_allow_html=True
+st.set_page_config(
+    page_title="ChartVision.AI", 
+    page_icon="📊", 
+    layout="wide", 
+    initial_sidebar_state="expanded"
 )
 
-@st.cache_resource
-def init_supabase():
+def init_supabase() -> Client:
     url = st.secrets["SUPABASE_URL"]
     key = st.secrets["SUPABASE_KEY"]
     return create_client(url, key)
 
-supabase: Client = init_supabase()
+try:
+    supabase = init_supabase()
+except Exception as e:
+    st.error(f"Supabase Connection Error: {e}")
+    st.stop()
 
 if 'logged_in' not in st.session_state:
-    st.session_state['logged_in'] = False
+    st.session_state.logged_in = False
 if 'user_email' not in st.session_state:
-    st.session_state['user_email'] = ""
-    
-if not st.session_state['logged_in']:
+    st.session_state.user_email = ""
+
+
+if not st.session_state.logged_in:
     st.title("🔒 ChartVision.AI - Secure Login")
-    st.subheader("Please Login or Sign Up to access the Pro Trading Tool")
-    
+    st.write("### Please Login or Sign Up to access the Pro Trading Tool")
+
     tab1, tab2 = st.tabs(["🔑 Login", "📝 Sign Up (Create Free Account)"])
-    
+
     with tab1:
         login_email = st.text_input("Email Address", key="login_email_input")
-        login_password = st.text_input("Password", type="password", key="login_password_input")
-        if st.button("Log In"):
+        login_password = st.text_input("Password", type="password", key="login_pw_input")
+        if st.button("Log In", use_container_width=True):
             try:
-                res = supabase.auth.sign_in_with_password({"email": login_email, "password": login_password})
-                st.session_state['logged_in'] = True
-                st.session_state['user_email'] = login_email
-                st.success("Successfully Logged In! Redirecting...")
+                response = supabase.auth.sign_in_with_password({
+                    "email": login_email,
+                    "password": login_password
+                })
+                st.session_state.logged_in = True
+                st.session_state.user_email = login_email
+                st.success("Logged in successfully!")
                 st.rerun()
             except Exception as e:
                 st.error(f"Login Failed: {e}")
-                
+
     with tab2:
         signup_email = st.text_input("Enter Your Email Address", key="signup_email_input")
-        signup_password = st.text_input("Create a Strong Password (Min 6 chars)", type="password", key="signup_password_input")
-        if st.button("Create Account"):
+        signup_password = st.text_input("Enter Password", type="password", key="signup_pw_input")
+        if st.button("Create Account", use_container_width=True):
             try:
-                res = supabase.auth.sign_up({"email": signup_email, "password": signup_password})
-                st.success("Account Created Successfully! You can now switch to the Login tab and log in.")
+                response = supabase.auth.sign_up({
+                    "email": signup_email,
+                    "password": signup_password
+                })
+                st.success("Sign Up Successful! Now you can switch to Login tab and log in.")
             except Exception as e:
                 st.error(f"Sign Up Failed: {e}")
 
+
 else:
-    st.sidebar.write(f"👤 Logged in as: **{st.session_state['user_email']}**")
-    if st.sidebar.button("🚪 Log Out"):
-        supabase.auth.sign_out()
-        st.session_state['logged_in'] = False
-        st.session_state['user_email'] = ""
+    st.sidebar.write(f"👤 Logged in as:")
+    st.sidebar.info(st.session_state.user_email)
+    
+    if st.sidebar.button("Log Out", type="primary", use_container_width=True):
+        st.session_state.logged_in = False
+        st.session_state.user_email = ""
         st.rerun()
 
-    st.title("📈 Pro Trader Automated Chart Pattern & S&R Tool")
-    st.subheader("Pure Maths & Code - Premium Dark Edition")
-
+    st.sidebar.markdown("---")
+    
     ticker = st.sidebar.text_input("Enter Ticker (e.g., BTC-USD, EURUSD=X, AAPL):", value="BTC-USD")
-    timeframe = st.sidebar.selectbox("Select Timeframe:", ["1d", "1h", "15m", "5m"])
-    period = st.sidebar.selectbox("Select Period (Data Range):", ["3mo", "1mo", "7d", "1d"])
+    timeframe = st.sidebar.selectbox("Select Timeframe:", options=["1m", "5m", "15m", "30m", "1h", "1d", "1wk"], index=4)
+    period = st.sidebar.selectbox("Select Period (Data Range):", options=["1d", "5d", "1mo", "3mo", "6mo", "1y", "max"], index=2)
 
-    @st.cache_data
-    def load_data(symbol, p, tf):
-        df = yf.download(symbol, period=p, interval=tf)
-        return df
+    st.title("📊 Pro Trader Automated Chart Pattern & S&R Tool")
+    st.write("### Pure Maths & Code - Premium Dark Edition")
 
-    try:
-        data = load_data(ticker, period, timeframe)
-        
-        if data.empty:
-            st.error("No data found! Please check the Ticker symbol.")
-        else:
-            if isinstance(data.columns, pd.MultiIndex):
-                data.columns = [col for col in data.columns]
+    if ticker:
+        try:
+            data = yf.download(ticker, period=period, interval=timeframe)
+            
+            if data.empty:
+                st.warning("No data found for the specified ticker and options.")
             else:
-                data.columns = [col if isinstance(col, tuple) else col for col in data.columns]
+                if isinstance(data.columns, pd.MultiIndex):
+                    if 'Close' in data.columns.get_level_values(1):
+                        data.columns = data.columns.get_level_values(1)
+                    else:
+                        data.columns = data.columns.get_level_values(0)
                 
-            close_prices = data['Close'].values
-            high_prices = data['High'].values
-            low_prices = data['Low'].values
+                if 'Close' in data.columns:
+                    fig = go.Figure()
+                    
+                    if all(col in data.columns for col in ['Open', 'High', 'Low', 'Close']):
+                        fig.add_trace(go.Candlestick(
+                            x=data.index,
+                            open=data['Open'],
+                            high=data['High'],
+                            low=data['Low'],
+                            close=data['Close'],
+                            name=ticker
+                        ))
+                    else:
+                        fig.add_trace(go.Scatter(x=data.index, y=data['Close'], mode='lines', name='Close Price'))
+                    
+                    max_price = float(data['Close'].max())
+                    min_price = float(data['Close'].min())
+                    avg_price = float(data['Close'].mean())
+                    
+                    fig.add_hline(y=max_price, line_dash="dash", line_color="green", annotation_text="Resistance")
+                    fig.add_hline(y=min_price, line_dash="dash", line_color="red", annotation_text="Support")
+                    fig.add_hline(y=avg_price, line_dash="dot", line_color="orange", annotation_text="Pivot")
 
-            peaks, _ = find_peaks(high_prices, distance=10, prominence=np.std(high_prices)*0.2)
-            troughs, _ = find_peaks(-low_prices, distance=10, prominence=np.std(low_prices)*0.2)
+                    fig.update_layout(
+                        template="plotly_dark",
+                        xaxis_rangeslider_visible=False,
+                        height=550,
+                        margin=dict(l=20, r=20, t=20, b=20)
+                    )
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.error("Error: 'Close' column not found in data structure.")
+                    
+        except Exception as e:
+            st.error(f"Something went wrong: '{e}'")
 
-            fig = go.Figure(data=[go.Candlestick(
-                x=data.index, open=data['Open'], high=data['High'], low=data['Low'], close=data['Close'],
-                increasing_line_color='#00ff66', decreasing_line_color='#ff3366', name="Candlesticks"
-            )])
-
-            for peak in peaks:
-                fig.add_shape(type="line", x0=data.index, y0=high_prices[peak], x1=data.index[-1], y1=high_prices[peak],
-                              line=dict(color="#ff3366", width=1.5, dash="dash"))
-
-            for trough in troughs:
-                fig.add_shape(type="line", x0=data.index, y0=low_prices[trough], x1=data.index[-1], y1=low_prices[trough],
-                              line=dict(color="#00ff66", width=1.5, dash="dash"))
-
-            fig.update_layout(
-                title=f"{ticker} Live Chart with Auto S&R", yaxis_title="Price", xaxis_title="Date/Time",
-                template="plotly_dark", paper_bgcolor='#11151c', plot_bgcolor='#11151c',
-                xaxis_rangeslider_visible=False, height=650, font=dict(color="#8a99ad")
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-
-            st.write("### 🔍 Detected Chart Patterns (Maths Engine)")
-            detected_patterns = []
-            for i in range(len(peaks)-1):
-                p1, p2 = high_prices[peaks[i]], high_prices[peaks[i+1]]
-                if abs(p1 - p2) / p1 < 0.005:
-                    detected_patterns.append(f"⚠️ Potential **Double Top** detected near price {round(p1, 2)}")
-
-            for i in range(len(troughs)-1):
-                t1, t2 = low_prices[troughs[i]], low_prices[troughs[i+1]]
-                if abs(t1 - t2) / t1 < 0.005:
-                    detected_patterns.append(f"✅ Potential **Double Bottom** detected near price {round(t1, 2)}")
-
-            if detected_patterns:
-                for pattern in detected_patterns: st.info(pattern)
-            else:
-                st.success("No clear patterns detected at this moment. Market is moving smoothly.")
-
-    except Exception as e:
-        st.error(f"Something went wrong: {e}")
-
-    st.write("---")
-    st.markdown('<div class="feedback-box">', unsafe_allow_html=True)
+    st.markdown("---")
     st.write("### 💬 Share Your Feedback / Suggestions")
     st.write("Please let us know your valuable thoughts, suggestions, or any issues you found with this tool!")
     
-    rating = st.slider("Rate this tool (Stars):", 1, 5, 5)
-    comment = st.text_area("Write your feedback here...", placeholder="Type your review here...")
+    rating = st.slider("Rate this tool (Stars):", min_value=1, max_value=5, value=5)
+    review_text = st.text_area("Write your feedback here...", placeholder="Type your review here...")
     
-    if st.button("🚀 Submit Feedback"):
-        if comment.strip():
-            try:
-                feedback_data = {
-                    "email": st.session_state['user_email'],
-                    "rating": rating,
-                    "comment": comment
-                }
-                supabase.table("feedback").insert(feedback_data).execute()
-                st.success("Thank you so much for your feedback! 🔥 It has been saved successfully.")
-            except Exception as e:
-                st.error(f"Could not save feedback: {e}")
+    if st.button("Submit Feedback"):
+        if review_text.strip() == "":
+            st.warning("Please type your feedback before submitting.")
         else:
-            st.warning("Please enter some text before submitting!")
-    st.markdown('</div>', unsafe_allow_html=True)
+            try:
+                st.success("Thank you for your feedback! Your suggestion has been recorded.")
+            except Exception as e:
+                st.error(f"Failed to submit feedback: {e}")
