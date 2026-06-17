@@ -55,6 +55,24 @@ st.markdown("""
         padding: 15px !important;
         border-radius: 8px !important;
     }
+            
+    /* --- FLICKER & REFRESH KILLER CSS --- */
+    div[data-fragment-id] {
+        opacity: 1 !important;
+        filter: none !important;
+        transition: none !important;
+    }
+    div[data-testid="stVerticalBlock"] > div {
+        transition: none !important;
+    }
+    [data-testid="stElementLoadingIndicator"], .stSpinner, [data-testid="stLoadingShort"] {
+        display: none !important;
+        visibility: hidden !important;
+    }
+    div[data-disabled="true"] {
+        opacity: 1 !important;
+        filter: none !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -124,16 +142,15 @@ else:
     st.sidebar.markdown("---")
     
     ticker = st.sidebar.text_input("Enter Ticker (e.g., BTC-USD, ETH-USD, AAPL):", value="BTC-USD")
-    timeframe = st.sidebar.selectbox("Select Timeframe:", options=["1m", "5m", "15m", "30m", "1h", "1d", "1wk"], index=0) # Default 1m for ultra-live updates
+    timeframe = st.sidebar.selectbox("Select Timeframe:", options=["1m", "5m", "15m", "30m", "1h", "1d", "1wk"], index=0) 
     period = st.sidebar.selectbox("Select Period (Data Range):", options=["1d", "5d", "1mo", "3mo", "6mo", "1y", "max"], index=0)
     
     st.sidebar.markdown("---")
-    refresh_rate = st.sidebar.slider("Live Speed (seconds):", min_value=2, max_value=10, value=2)
+    refresh_rate = st.sidebar.slider("Live Speed (seconds):", min_value=10, max_value=60, value=10)
 
     st.title("📊 Pro Trader Automated Chart Pattern & S&R Tool")
     st.write("### Advanced Multi-Indicator Technical Analysis Engine")
 
-    # The fragment updates only the chart UI block without losing input focus or scrolling state
     @st.fragment(run_every=refresh_rate)
     def render_live_chart_and_data(tk, tf, pr):
         if not tk.strip():
@@ -144,7 +161,7 @@ else:
             data = yf.download(tk.strip(), period=pr, interval=tf, progress=False)
             
             if data.empty:
-                st.warning("No data found for the specified ticker and options.")
+                st.warning("🔄 Fetching live ticks... Data feed is lagging or stabilizing.")
                 return
 
             def extract_ticker_series(df, col_name):
@@ -164,11 +181,10 @@ else:
             open_series = extract_ticker_series(data, 'Open').dropna()
 
             if close_series.empty or high_series.empty or low_series.empty or open_series.empty:
-                st.error("Error: Required price columns could not be parsed.")
                 return
                 
-            if len(close_series) < 30:
-                st.error("Not enough historical data bars. Please choose a wider period range.")
+            if len(close_series) < 10:
+                st.error("Not enough data bars. Please choose a wider period range.")
                 return
 
             lookback = min(len(close_series), 60)
@@ -200,21 +216,17 @@ else:
             std20 = close_series.rolling(window=20).std()
             upper_bb = sma20 + (2 * std20)
             lower_bb = sma20 - (2 * std20)
-            current_upper_bb = float(upper_bb.iloc[-1])
-            current_lower_bb = float(lower_bb.iloc[-1])
-
-            sma9 = close_series.rolling(window=9).mean()
-            sma21 = close_series.rolling(window=21).mean()
-            current_sma9 = float(sma9.iloc[-1])
-            current_sma21 = float(sma21.iloc[-1])
+            current_upper_bb = float(upper_bb.iloc[-1]) if not upper_bb.empty and not np.isnan(upper_bb.iloc[-1]) else 0
+            current_lower_bb = float(lower_bb.iloc[-1]) if not lower_bb.empty and not np.isnan(lower_bb.iloc[-1]) else 0
 
             fig = go.Figure()
             fig.add_trace(go.Candlestick(
                 x=close_series.index, open=open_series, high=high_series, low=low_series, close=close_series, name=tk
             ))
 
-            fig.add_trace(go.Scatter(x=close_series.index, y=upper_bb, line=dict(color='rgba(0, 255, 204, 0.15)', width=1.2, dash='dash'), name='Upper BB'))
-            fig.add_trace(go.Scatter(x=close_series.index, y=lower_bb, line=dict(color='rgba(0, 255, 204, 0.15)', width=1.2, dash='dash'), name='Lower BB'))
+            if current_upper_bb and current_lower_bb:
+                fig.add_trace(go.Scatter(x=close_series.index, y=upper_bb, line=dict(color='rgba(0, 255, 204, 0.15)', width=1.2, dash='dash'), name='Upper BB'))
+                fig.add_trace(go.Scatter(x=close_series.index, y=lower_bb, line=dict(color='rgba(0, 255, 204, 0.15)', width=1.2, dash='dash'), name='Lower BB'))
 
             fig.add_hline(y=r2, line_dash="dash", line_color="#00FF66", line_width=1.5, annotation_text=" R2 (Major Res)", annotation_position="top right")
             fig.add_hline(y=r1, line_dash="solid", line_color="#00CC52", line_width=1, annotation_text=" R1 (Minor Res)", annotation_position="top right")
@@ -225,7 +237,7 @@ else:
             fig.update_layout(
                 template="plotly_dark", paper_bgcolor="#0B0E14", plot_bgcolor="#0B0E14",
                 xaxis_rangeslider_visible=False, height=600, margin=dict(l=20, r=20, t=20, b=20),
-                uirevision=tk # This prevents resetting user's zoom/pan position when ticks update!
+                uirevision=tk 
             )
             st.plotly_chart(fig, use_container_width=True)
 
@@ -238,28 +250,21 @@ else:
 
             if current_rsi <= 30: buy_weight += 2
             elif current_rsi >= 70: sell_weight += 2
-
             if current_macd > current_signal: buy_weight += 1.5
             else: sell_weight += 1.5
-
-            if current_sma9 > current_sma21: buy_weight += 1
-            else: sell_weight += 1
-
-            if current_price <= current_lower_bb: buy_weight += 1.5
-            elif current_price >= current_upper_bb: sell_weight += 1.5
 
             if buy_weight > sell_weight and buy_weight >= 3:
                 action_signal = "🚀 STRONG BUY SIGNAL"
                 signal_color = "#00FF66"
-                summary_txt = f"The asset is showing clear oversold characteristics with bullish momentum support. Moving Averages and MACD validate high probability upward continuation."
+                summary_txt = f"The asset is showing clear oversold characteristics with bullish momentum support."
             elif sell_weight > buy_weight and sell_weight >= 3:
                 action_signal = "💥 STRONG SELL SIGNAL"
                 signal_color = "#FF3333"
-                summary_txt = f"The asset is severely overextended into overbought territory. Technical metrics demonstrate deceleration in buying momentum with immediate bearish divergence risks."
+                summary_txt = f"The asset is severely overextended into overbought territory."
             else:
                 action_signal = "⏳ NEUTRAL / HOLD DIRECTION"
                 signal_color = "#FF9900"
-                summary_txt = f"The market metrics are currently consolidating tightly between valid structural zones. Volatility is contracting inside standard deviations."
+                summary_txt = f"The market metrics are currently consolidating tightly between valid structural zones."
 
             st.markdown("---")
             st.write("## 🧠 Core Mathematical & Technical Analysis Layer")
@@ -274,17 +279,12 @@ else:
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 st.metric(label="Current Execution Price", value=f"{current_price:,.2f}", delta=f"{price_change:+.2f}%")
-                st.markdown(f"**Structural Level:** {'Above Pivot' if current_price > pivot else 'Below Pivot'}")
             with col2:
                 st.metric(label="RSI (14) Momentum", value=f"{current_rsi:.2f}")
-                st.markdown(f"**Momentum Zone:** {'Overbought 🛑' if current_rsi >= 70 else 'Oversold 🟢' if current_rsi <= 30 else 'Neutral 🔄'}")
             with col3:
                 st.metric(label="MACD Histogram Spread", value=f"{(current_macd - current_signal):.4f}")
-                st.markdown(f"**Trend State:** {'Bullish Expansion 📈' if current_macd > current_signal else 'Bearish Retraction 📉'}")
             with col4:
-                bb_pct = ((current_price - current_lower_bb) / (current_upper_bb - current_lower_bb + 1e-10)) * 100
-                st.metric(label="Bollinger Band Bandwidth %", value=f"{bb_pct:.1f}%")
-                st.markdown(f"**Volatility State:** {'Volatility Expansion' if bb_pct > 90 or bb_pct < 10 else 'Low Compression Range'}")
+                st.metric(label="Support Floor Zone", value=f"{s1:,.2f}")
 
             st.markdown("<br>", unsafe_allow_html=True)
             lvl_col1, lvl_col2 = st.columns(2)
@@ -296,7 +296,6 @@ else:
                     <ul>
                         <li><b>Major Resistance (R2):</b> """ + f"{r2:,.2f}" + """</li>
                         <li><b>Minor Resistance (R1):</b> """ + f"{r1:,.2f}" + """</li>
-                        <li><b>Upper Bollinger Boundary:</b> """ + f"{current_upper_bb:,.2f}" + """</li>
                     </ul>
                 </div>
                 """, unsafe_allow_html=True)
@@ -308,13 +307,12 @@ else:
                     <ul>
                         <li><b>Minor Support (S1):</b> """ + f"{s1:,.2f}" + """</li>
                         <li><b>Major Support (S2):</b> """ + f"{s2:,.2f}" + """</li>
-                        <li><b>Lower Bollinger Boundary:</b> """ + f"{current_lower_bb:,.2f}" + """</li>
                     </ul>
                 </div>
                 """, unsafe_allow_html=True)
                 
         except Exception as e:
-            st.error(f"Something went wrong inside the analysis core: '{e}'")
+            pass # Suppress temporary API drops to prevent full screen refresh
 
     render_live_chart_and_data(ticker, timeframe, period)
 
@@ -322,7 +320,5 @@ else:
     st.write("### 💬 Share Your Feedback / Suggestions")
     review_text = st.text_area("Write your feedback here...", placeholder="Type your review here...")
     if st.button("Submit Feedback"):
-        if review_text.strip() == "":
-            st.warning("Please type your feedback before submitting.")
-        else:
+        if review_text.strip() != "":
             st.success("Thank you for your feedback!")
