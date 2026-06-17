@@ -130,9 +130,11 @@ else:
     st.title("📊 Pro Trader Automated Chart Pattern & S&R Tool")
     st.write("### Advanced Multi-Indicator Technical Analysis Engine")
 
-    if ticker:
+    if not ticker.strip():
+        st.info("Please enter a valid ticker symbol in the sidebar to load the chart.")
+    else:
         try:
-            data = yf.download(ticker, period=period, interval=timeframe)
+            data = yf.download(ticker.strip(), period=period, interval=timeframe)
             
             if data.empty:
                 st.warning("No data found for the specified ticker and options.")
@@ -154,21 +156,20 @@ else:
                 open_series = extract_ticker_series(data, 'Open').dropna()
 
                 if close_series.empty or high_series.empty or low_series.empty or open_series.empty:
-                    st.error("Error: Required price columns ('Close', 'High', 'Low', 'Open') could not be parsed from the data structure.")
+                    st.error("Error: Required price columns could not be parsed from the data structure.")
                 elif len(close_series) < 30:
                     st.error("Not enough historical data bars to process technical math indicators. Please choose a wider period range.")
                 else:
-                    r2_series = high_series.rolling(window=20, min_periods=1).quantile(0.92)
-                    r1_series = high_series.rolling(window=20, min_periods=1).quantile(0.75)
-                    pivot_series = close_series.rolling(window=20, min_periods=1).quantile(0.50)
-                    s1_series = low_series.rolling(window=20, min_periods=1).quantile(0.25)
-                    s2_series = low_series.rolling(window=20, min_periods=1).quantile(0.08)
+                    lookback = min(len(close_series), 60)
+                    recent_high = high_series.iloc[-lookback:]
+                    recent_low = low_series.iloc[-lookback:]
+                    recent_close = close_series.iloc[-lookback:]
 
-                    r2 = float(r2_series.iloc[-1])
-                    r1 = float(r1_series.iloc[-1])
-                    pivot = float(pivot_series.iloc[-1])
-                    s1 = float(s1_series.iloc[-1])
-                    s2 = float(s2_series.iloc[-1])
+                    r2 = float(recent_high.quantile(0.90))
+                    r1 = float(recent_high.quantile(0.75))
+                    pivot = float(recent_close.quantile(0.50))
+                    s1 = float(recent_low.quantile(0.25))
+                    s2 = float(recent_low.quantile(0.10))
 
                     delta = close_series.diff()
                     gain = (delta.where(delta > 0, 0)).ewm(span=14, adjust=False).mean()
@@ -191,8 +192,8 @@ else:
                     current_upper_bb = float(upper_bb.iloc[-1])
                     current_lower_bb = float(lower_bb.iloc[-1])
 
-                    sma9 = close_series.rolling(window=20).mean()
-                    sma21 = close_series.rolling(window=50).mean()
+                    sma9 = close_series.rolling(window=9).mean()
+                    sma21 = close_series.rolling(window=21).mean()
                     current_sma9 = float(sma9.iloc[-1])
                     current_sma21 = float(sma21.iloc[-1])
 
@@ -201,18 +202,18 @@ else:
                         x=close_series.index, open=open_series, high=high_series, low=low_series, close=close_series, name=ticker
                     ))
 
-                    fig.add_trace(go.Scatter(x=close_series.index, y=upper_bb, line=dict(color='rgba(0, 255, 204, 0.15)', width=1.5, dash='dash'), name='Upper BB'))
-                    fig.add_trace(go.Scatter(x=close_series.index, y=lower_bb, line=dict(color='rgba(0, 255, 204, 0.15)', width=1.5, dash='dash'), name='Lower BB'))
+                    fig.add_trace(go.Scatter(x=close_series.index, y=upper_bb, line=dict(color='rgba(0, 255, 204, 0.2)', width=1.2, dash='dash'), name='Upper BB'))
+                    fig.add_trace(go.Scatter(x=close_series.index, y=lower_bb, line=dict(color='rgba(0, 255, 204, 0.2)', width=1.2, dash='dash'), name='Lower BB'))
 
-                    fig.add_trace(go.Scatter(x=close_series.index, y=r2_series, line=dict(color="#00FF66", width=1.5, dash='dash'), name="Major Resistance (R2)"))
-                    fig.add_trace(go.Scatter(x=close_series.index, y=r1_series, line=dict(color="#00CC52", width=1), name="Minor Resistance (R1)"))
-                    fig.add_trace(go.Scatter(x=close_series.index, y=pivot_series, line=dict(color="#FF9900", width=1, dash='dot'), name="Market Pivot (PP)"))
-                    fig.add_trace(go.Scatter(x=close_series.index, y=s1_series, line=dict(color="#FF3333", width=1), name="Minor Support (S1)"))
-                    fig.add_trace(go.Scatter(x=close_series.index, y=s2_series, line=dict(color="#CC0000", width=1.5, dash='dash'), name="Major Support (S2)"))
+                    fig.add_hline(y=r2, line_dash="dash", line_color="#00FF66", line_width=1.5, annotation_text=" R2 (Major Res)", annotation_position="top right")
+                    fig.add_hline(y=r1, line_dash="solid", line_color="#00CC52", line_width=1, annotation_text=" R1 (Minor Res)", annotation_position="top right")
+                    fig.add_hline(y=pivot, line_dash="dot", line_color="#FF9900", line_width=1, annotation_text=" PP (Pivot)", annotation_position="top right")
+                    fig.add_hline(y=s1, line_dash="solid", line_color="#FF3333", line_width=1, annotation_text=" S1 (Minor Sup)", annotation_position="bottom right")
+                    fig.add_hline(y=s2, line_dash="dash", line_color="#CC0000", line_width=1.5, annotation_text=" S2 (Major Sup)", annotation_position="bottom right")
 
                     fig.update_layout(
                         template="plotly_dark", paper_bgcolor="#0B0E14", plot_bgcolor="#0B0E14",
-                        xaxis_rangeslider_visible=False, height=550, margin=dict(l=20, r=20, t=20, b=20)
+                        xaxis_rangeslider_visible=False, height=600, margin=dict(l=20, r=20, t=20, b=20)
                     )
                     st.plotly_chart(fig, use_container_width=True)
 
