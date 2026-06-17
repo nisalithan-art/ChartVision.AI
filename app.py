@@ -11,6 +11,32 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+st.markdown("""
+    <style>
+    .stApp {
+        background-color: #0B0E14 !important;
+        color: #E0E6ED !important;
+    }
+    [data-testid="stSidebar"] {
+        background-color: #11151D !important;
+    }
+    div[data-baseweb="input"], div[data-baseweb="select"] {
+        background-color: #1A1F2C !important;
+        color: white !important;
+    }
+    input {
+        color: white !important;
+    }
+    button[data-baseweb="tab"] {
+        color: #8A99AD !important;
+    }
+    button[aria-selected="true"] {
+        color: #00FFCC !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+
 def init_supabase() -> Client:
     url = st.secrets["SUPABASE_URL"]
     key = st.secrets["SUPABASE_KEY"]
@@ -110,18 +136,30 @@ else:
                     else:
                         fig.add_trace(go.Scatter(x=data.index, y=data['Close'], mode='lines', name='Close Price'))
                     
-                    max_price = float(data['Close'].max())
-                    min_price = float(data['Close'].min())
-                    avg_price = float(data['Close'].mean())
+                    high_p = float(data['High'].max())
+                    low_p = float(data['Low'].min())
+                    close_p = float(data['Close'].iloc[-1])
                     
-                    fig.add_hline(y=max_price, line_dash="dash", line_color="green", annotation_text="Resistance")
-                    fig.add_hline(y=min_price, line_dash="dash", line_color="red", annotation_text="Support")
-                    fig.add_hline(y=avg_price, line_dash="dot", line_color="orange", annotation_text="Pivot")
+                    pivot = (high_p + low_p + close_p) / 3
+                    r1 = (2 * pivot) - low_p
+                    s1 = (2 * pivot) - high_p
+                    r2 = pivot + (high_p - low_p)
+                    s2 = pivot - (high_p - low_p)
+
+                    fig.add_hline(y=r2, line_dash="dash", line_color="#00FF66", line_width=1.5, annotation_text="Resistance 2 (R2)", annotation_position="top left")
+                    fig.add_hline(y=r1, line_dash="dash", line_color="#00CC52", line_width=1, annotation_text="Resistance 1 (R1)", annotation_position="top left")
+                    
+                    fig.add_hline(y=pivot, line_dash="dot", line_color="#FF9900", line_width=1, annotation_text="Pivot Point (PP)", annotation_position="top left")
+                    
+                    fig.add_hline(y=s1, line_dash="dash", line_color="#FF3333", line_width=1, annotation_text="Support 1 (S1)", annotation_position="bottom left")
+                    fig.add_hline(y=s2, line_dash="dash", line_color="#CC0000", line_width=1.5, annotation_text="Support 2 (S2)", annotation_position="bottom left")
 
                     fig.update_layout(
                         template="plotly_dark",
+                        paper_bgcolor="#0B0E14",
+                        plot_bgcolor="#0B0E14",
                         xaxis_rangeslider_visible=False,
-                        height=550,
+                        height=600,
                         margin=dict(l=20, r=20, t=20, b=20)
                     )
                     
