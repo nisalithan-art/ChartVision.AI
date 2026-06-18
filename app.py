@@ -11,6 +11,7 @@ st.set_page_config(
     layout="wide", 
     initial_sidebar_state="expanded"
 )
+
 st.markdown("""
     <style>
     .stApp {
@@ -119,6 +120,7 @@ else:
     
     st.sidebar.markdown("---")
     st.sidebar.write("### 🛠️ Smart Money & Chart Tools")
+    
     show_sr = st.sidebar.toggle("🎯 Auto-Snap S&R Lines", value=False)
     show_trendlines = st.sidebar.toggle("📈 Auto-Trendlines & Breakouts", value=False)
     show_ob = st.sidebar.toggle("🛡️ Unmitigated Order Blocks (OB)", value=False)
@@ -129,7 +131,11 @@ else:
     refresh_rate = 10 if live_mode else None
 
     st.title("📊 ChartVision.AI - Smart Money Concepts Dashboard")
-    st.write("### Toggle advanced institutional metrics and automated trend breakout markers from the sidebar.")
+
+    if live_mode:
+        st.info("💡 **To stretch/extend OB & FVG boxes freely:** Turn OFF 'Live Market Update' on the sidebar so your manual adjustments won't reset.")
+    else:
+        st.success("🎨 **Interactive Mode Active:** Click once on any generated box and grab its edges to stretch or resize it into the future!")
 
     live_ui_placeholder = st.empty()
 
@@ -175,11 +181,11 @@ else:
             s2 = float(low_series.iloc[-lookback:].quantile(0.08))
 
             if s_sr:
-                fig.add_hline(y=r2, line_dash="dash", line_color="#00FF66", line_width=1.5, annotation_text=" R2 (Major Resistance)")
-                fig.add_hline(y=r1, line_dash="solid", line_color="#00CC52", line_width=1, annotation_text=" R1 (Minor Resistance)")
-                fig.add_hline(y=pivot, line_dash="dot", line_color="#FF9900", line_width=1, annotation_text=" PP (Pivot)")
-                fig.add_hline(y=s1, line_dash="solid", line_color="#FF3333", line_width=1, annotation_text=" S1 (Minor Support)")
-                fig.add_hline(y=s2, line_dash="dash", line_color="#CC0000", line_width=1.5, annotation_text=" S2 (Major Support Floor)")
+                fig.add_hline(y=r2, line_dash="dash", line_color="#00FF66", line_width=1.5, annotation_text=" R2")
+                fig.add_hline(y=r1, line_dash="solid", line_color="#00CC52", line_width=1, annotation_text=" R1")
+                fig.add_hline(y=pivot, line_dash="dot", line_color="#FF9900", line_width=1, annotation_text=" PP")
+                fig.add_hline(y=s1, line_dash="solid", line_color="#FF3333", line_width=1, annotation_text=" S1")
+                fig.add_hline(y=s2, line_dash="dash", line_color="#CC0000", line_width=1.5, annotation_text=" S2")
 
             if s_tl:
                 window = 10
@@ -192,19 +198,14 @@ else:
                 if len(high_peaks) >= 2:
                     p1_idx, p2_idx = high_peaks.index[-2], high_peaks.index[-1]
                     p1_val, p2_val = high_peaks.iloc[-2], high_peaks.iloc[-1]
-                    
-                    # Formulate trendline line formula: y = mx + c
                     x_vals = np.arange(len(close_series))
                     idx_map = {date: i for i, date in enumerate(close_series.index)}
-                    
                     x1, x2 = idx_map[p1_idx], idx_map[p2_idx]
                     m = (p2_val - p1_val) / (x2 - x1)
                     c = p1_val - m * x1
-                    
                     res_trend = m * x_vals + c
-                    
                     fig.add_trace(go.Scatter(x=close_series.index[max(x1, 0):], y=res_trend[max(x1, 0):], line=dict(color="#FF00CC", width=1.5, dash="dash"), name="Resistance Trend"))
-
+                    
                     for i in range(x2 + 1, len(close_series)):
                         if close_series.iloc[i] > res_trend[i] and close_series.iloc[i-1] <= res_trend[i-1]:
                             breakout_buys.append(close_series.index[i])
@@ -212,16 +213,12 @@ else:
                 if len(low_troughs) >= 2:
                     t1_idx, t2_idx = low_troughs.index[-2], low_troughs.index[-1]
                     t1_val, t2_val = low_troughs.iloc[-2], low_troughs.iloc[-1]
-                    
                     idx_map = {date: i for i, date in enumerate(close_series.index)}
                     x_vals = np.arange(len(close_series))
-                    
                     x1, x2 = idx_map[t1_idx], idx_map[t2_idx]
                     m = (t2_val - t1_val) / (x2 - x1)
                     c = t1_val - m * x1
-                    
                     sup_trend = m * x_vals + c
-                    
                     fig.add_trace(go.Scatter(x=close_series.index[max(x1, 0):], y=sup_trend[max(x1, 0):], line=dict(color="#00FFFF", width=1.5, dash="dash"), name="Support Trend"))
 
                     for i in range(x2 + 1, len(close_series)):
@@ -236,24 +233,22 @@ else:
             if s_ob:
                 bullish_obs = []
                 bearish_obs = []
-
+                
                 for i in range(len(close_series) - 3, max(1, len(close_series) - 50), -1):
                     if close_series.iloc[i] > open_series.iloc[i] and (close_series.iloc[i] - open_series.iloc[i]) > (high_series.iloc[i] - low_series.iloc[i]) * 0.5:
                         if close_series.iloc[i-1] < open_series.iloc[i-1]:
                             ob_low = low_series.iloc[i-1]
                             ob_high = high_series.iloc[i-1]
-
                             subsequent_lows = low_series.iloc[i:]
                             if not (subsequent_lows < ob_low).any():
                                 bullish_obs.append((close_series.index[i-1], ob_low, ob_high))
-                                if len(bullish_obs) >= 3: break # Limit to top 3 latest fresh zones
+                                if len(bullish_obs) >= 3: break
 
                 for i in range(len(close_series) - 3, max(1, len(close_series) - 50), -1):
                     if close_series.iloc[i] < open_series.iloc[i] and (open_series.iloc[i] - close_series.iloc[i]) > (high_series.iloc[i] - low_series.iloc[i]) * 0.5:
                         if close_series.iloc[i-1] > open_series.iloc[i-1]:
                             ob_low = low_series.iloc[i-1]
                             ob_high = high_series.iloc[i-1]
-
                             subsequent_highs = high_series.iloc[i:]
                             if not (subsequent_highs > ob_high).any():
                                 bearish_obs.append((close_series.index[i-1], ob_low, ob_high))
@@ -269,15 +264,13 @@ else:
                     if high_series.iloc[i] < low_series.iloc[i+2] and close_series.iloc[i+1] > open_series.iloc[i+1]:
                         gap_bottom = high_series.iloc[i]
                         gap_top = low_series.iloc[i+2]
-
                         future_lows = low_series.iloc[i+2:]
                         if not (future_lows <= gap_bottom).any():
                             fig.add_shape(type="rect", x0=close_series.index[i+1], y0=gap_bottom, x1=close_series.index[-1], y1=gap_top, fillcolor="rgba(0, 255, 204, 0.05)", line=dict(width=0))
-
+                    
                     if low_series.iloc[i] > high_series.iloc[i+2] and close_series.iloc[i+1] < open_series.iloc[i+1]:
                         gap_top = low_series.iloc[i]
                         gap_bottom = high_series.iloc[i+2]
-
                         future_highs = high_series.iloc[i+2:]
                         if not (future_highs >= gap_top).any():
                             fig.add_shape(type="rect", x0=close_series.index[i+1], y0=gap_bottom, x1=close_series.index[-1], y1=gap_top, fillcolor="rgba(255, 153, 0, 0.05)", line=dict(width=0))
@@ -293,7 +286,16 @@ else:
             price_change = ((current_price - prev_price) / prev_price) * 100
 
             with live_ui_placeholder.container():
-                st.plotly_chart(fig, use_container_width=True, key="smc_dashboard_chart_canvas", config={'displaylogo': False, 'scrollZoom': True})
+                st.plotly_chart(
+                    fig, 
+                    use_container_width=True, 
+                    key="smc_dashboard_chart_canvas", 
+                    config={
+                        'editable': True, 
+                        'displaylogo': False, 
+                        'scrollZoom': True
+                    }
+                )
 
                 st.markdown("---")
                 st.write("## 🏛️ Smart Money Technical Matrix Data")
@@ -312,3 +314,25 @@ else:
             pass
 
     render_smart_dashboard(ticker, timeframe, period, show_sr, show_trendlines, show_ob, show_fvg)
+
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.markdown("---")
+    st.write("## 💬 Developer Feedback & Feature Request Desk")
+    st.caption("Your recommendations directly build the system core. Submit bugs or feature ideas below:")
+    
+    with st.form("feedback_system_form", clear_on_submit=True):
+        fb_msg = st.text_area("What features should we add or fix next?", placeholder="Example: Add Fibonacci Retracements / Fix mobile sidebar layout...")
+        submit_fb = st.form_submit_button("Submit Pro Feedback", use_container_width=True)
+        
+        if submit_fb:
+            if fb_msg.strip():
+                try:
+                    supabase.table("feedback").insert({
+                        "email": st.session_state.user_email, 
+                        "message": fb_msg.strip()
+                    }).execute()
+                    st.success("🎯 Awesome! Your feedback was logged directly into the developer database. Thanks for improving ChartVision.AI!")
+                except Exception as e:
+                    st.error(f"Could not connect to database matrix: {e}")
+            else:
+                st.warning("Please type something before clicking submit!")
