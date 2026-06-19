@@ -1,12 +1,14 @@
 import streamlit as st
-import streamlit.components.v1 as components
+import pandas as pd
+import yfinance as yf
+import json
 from supabase import create_client, Client
 
 st.set_page_config(
     page_title="ChartVision.AI Premium Pro Terminal", 
     page_icon="📊", 
     layout="wide", 
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 st.markdown("""
@@ -19,14 +21,19 @@ st.markdown("""
         background-color: #1c2030 !important;
         border-right: 1px solid #2a2e39 !important;
     }
-    [data-testid="stHeader"] {
-        background-color: rgba(0,0,0,0) !important;
+    label, .stWidgetLabel p {
+        color: #848e9c !important;
+        font-weight: 500 !important;
+        font-size: 13px !important;
+    }
+    div[data-baseweb="input"], div[data-baseweb="select"] {
+        background-color: #1e222d !important;
+        border: 1px solid #2a2e39 !important;
+        border-radius: 4px !important;
     }
     .block-container {
-        padding-top: 1rem !important;
+        padding-top: 1.5rem !important;
         padding-bottom: 0rem !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -71,60 +78,127 @@ if not st.session_state.logged_in:
             except Exception as e:
                 st.error(f"Sign Up Failed: {e}")
 else:
-    tradingview_html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-            html, body {
-                margin: 0;
-                padding: 0;
-                height: 100%;
-                width: 100%;
-                background-color: #131722;
-                overflow: hidden;
-            }
-            #tv_terminal_container {
-                height: 100vh;
-                width: 100%;
-            }
-        </style>
-    </head>
-    <body>
-        <div id="tv_terminal_container"></div>
-        <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-        <script type="text/javascript">
-            new TradingView.widget({
-                "width": "100%",
-                "height": "100%",
-                "symbol": "BITSTAMP:BTCUSD",
-                "interval": "60",
-                "timezone": "Etc/UTC",
-                "theme": "dark",
-                "style": "1",
-                "locale": "en",
-                "enable_publishing": false,
-                "hide_side_toolbar": false,
-                "allow_symbol_change": true,
-                "container_id": "tv_terminal_container",
-                "watchlist": [
-                    "BITSTAMP:BTCUSD",
-                    "BITSTAMP:ETHUSD",
-                    "COINBASE:BTCUSD",
-                    "BINANCE:BTCUSDT"
-                ],
-                "details": true,
-                "hotlist": true,
-                "calendar": true,
-                "studies": [
-                    "STD;RSI"
-                ]
-            });
-        </script>
-    </body>
-    </html>
-    """
+    st.sidebar.markdown(f"🟢 **Premium Active**<br><small style='color:#787b86;'>{st.session_state.user_email}</small>", unsafe_allow_html=True)
+    if st.sidebar.button("Sign Out Terminal", type="secondary", use_container_width=True):
+        st.session_state.logged_in = False
+        st.session_state.user_email = ""
+        st.rerun()
+
+    st.sidebar.markdown("---")
+    ticker = st.sidebar.text_input("Symbol:", value="BTC-USD")
+    timeframe = st.sidebar.selectbox("Interval:", options=["1m", "5m", "15m", "30m", "1h", "1d"], index=4) 
+    period = st.sidebar.selectbox("Range:", options=["1d", "5d", "1mo", "3mo", "1y", "max"], index=2)
     
-    components.html(tradingview_html, height=850, scrolling=False)
+    st.sidebar.markdown("---")
+    st.sidebar.write("### 🛠️ Proprietary Core Algorithmic Indicators")
+    show_sr = st.sidebar.toggle("🎯 Auto-Snap S&R Lines", value=True)
+    show_ob = st.sidebar.toggle("🛡️ Smart Money Order Blocks", value=True)
+    
+    st.sidebar.markdown("---")
+    with st.sidebar.expander("🎨 Custom Chart Styling Panel", expanded=False):
+        c_bull = st.color_picker("Bullish Candle", value="#26a69a")
+        c_bear = st.color_picker("Bearish Candle", value="#ef5350")
+        c_res = st.color_picker("Resistance Vectors", value="#ef5350")
+        c_sup = st.color_picker("Support Vectors", value="#26a69a")
+
+    try:
+        data = yf.download(ticker.strip(), period=period, interval=timeframe, progress=False)
+        
+        if data is not None and not data.empty:
+            def extract_series(df, name):
+                if name in df.columns:
+                    series = df[name]
+                    return series.iloc[:, 0] if isinstance(series, pd.DataFrame) else series
+                if isinstance(df.columns, pd.MultiIndex):
+                    for c in df.columns:
+                        if name in c:
+                            series = df[c]
+                            return series.iloc[:, 0] if isinstance(series, pd.DataFrame) else series
+                return pd.Series(dtype=float)
+
+            df_clean = pd.DataFrame({
+                'open': extract_series(data, 'Open'),
+                'high': extract_series(data, 'High'),
+                'low': extract_series(data, 'Low'),
+                'close': extract_series(data, 'Close')
+            }).dropna()
+
+            df_clean['time'] = df_clean.index.astype('int64') // 10**9
+            chart_records = df_clean[['time', 'open', 'high', 'low', 'close']].to_dict(orient='records')
+            js_candles = json.dumps(chart_records)
+
+            sr_data = {"res": 0.0, "sup": 0.0, "show": False}
+            if show_sr and len(df_clean) > 20:
+                sr_data["res"] = float(df_clean['high'].tail(50).max())
+                sr_data["sup"] = float(df_clean['low'].tail(50).min())
+                sr_data["show"] = True
+
+            ob_data = {"top": 0.0, "bottom": 0.0, "show": False}
+            if show_ob and len(df_clean) > 30:
+                for i in range(len(df_clean) - 3, len(df_clean) - 30, -1):
+                    if df_clean['close'].iloc[i] < df_clean['open'].iloc[i]:
+                        if df_clean['close'].iloc[i+1] > df_clean['open'].iloc[i+1]:
+                            ob_data["top"] = float(df_clean['high'].iloc[i])
+                            ob_data["bottom"] = float(df_clean['low'].iloc[i])
+                            ob_data["show"] = True
+                            break
+
+            st.markdown(f"<h2 style='margin:0 0 10px 0; font-weight:600; color:#ffffff;'>📊 {ticker} Custom In-House Terminal</h2>", unsafe_allow_html=True)
+
+            custom_terminal_html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <style>
+                    html, body {{ margin: 0; padding: 0; width: 100%; height: 100%; background-color: #131722; overflow: hidden; }}
+                    #custom_canvas {{ width: 100%; height: 680px; }}
+                </style>
+                <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+            </head>
+            <body>
+                <div id="custom_canvas"></div>
+                <script>
+                    const chart = LightweightCharts.createChart(document.getElementById('custom_canvas'), {{
+                        width: document.getElementById('custom_canvas').clientWidth,
+                        height: 680,
+                        layout: {{ backgroundColor: '#131722', textColor: '#d1d4dc', fontSize: 12 }},
+                        grid: {{ vertLines: {{ color: '#1f222e' }}, horzLines: {{ color: '#1f222e' }} }},
+                        crosshair: {{ mode: LightweightCharts.CrosshairMode.Normal }},
+                        priceScale: {{ borderColor: '#2a2e39', scaleMargins: {{ top: 0.1, bottom: 0.1 }} }},
+                        timeScale: {{ borderColor: '#2a2e39', timeVisible: true, secondsVisible: false }}
+                    }});
+
+                    const candleSeries = chart.addCandlestickSeries({{
+                        upColor: '{c_bull}', downColor: '{c_bear}',
+                        borderUpColor: '{c_bull}', borderDownColor: '{c_bear}',
+                        wickUpColor: '{c_bull}', wickDownColor: '{c_bear}'
+                    }});
+
+                    const data = {js_candles};
+                    candleSeries.setData(data);
+
+                    const srInfo = {json.dumps(sr_data)};
+                    if (srInfo.show) {{
+                        candleSeries.createPriceLine({{ price: srInfo.res, color: '{c_res}', lineWidth: 2, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: 'Resistance' }});
+                        candleSeries.createPriceLine({{ price: srInfo.sup, color: '{c_sup}', lineWidth: 2, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: 'Support' }});
+                    }}
+
+                    const obInfo = {json.dumps(ob_data)};
+                    if (obInfo.show) {{
+                        candleSeries.createPriceLine({{ price: obInfo.top, color: '#00ffcc', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Solid, axisLabelVisible: true, title: 'OB Top' }});
+                        candleSeries.createPriceLine({{ price: obInfo.bottom, color: '#00ffcc', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Solid, axisLabelVisible: true, title: 'OB Bottom' }});
+                    }}
+
+                    window.addEventListener('resize', () => {{
+                        chart.resize(document.getElementById('custom_canvas').clientWidth, 680);
+                    }});
+                </script>
+            </body>
+            </html>
+            """
+            import streamlit.components.v1 as components
+            components.html(custom_terminal_html, height=690, scrolling=False)
+
+    except Exception as e:
+        st.error(f"Data Core Connection Failure: {e}")
