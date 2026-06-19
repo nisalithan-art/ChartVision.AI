@@ -74,6 +74,10 @@ st.markdown("""
     html, body, [data-testid="stCanvasBlockContainer"] {
         background-color: #131722 !important;
     }
+    iframe {
+        background-color: #131722 !important;
+        border: none !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -155,11 +159,15 @@ else:
             st.toast("Layout vectors flushed.")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    symbol_map = {
-        "BTC-USD": "BTCUSDT", "ETH-USD": "ETHUSDT", 
-        "SOL-USD": "SOLUSDT", "BNB-USD": "BNBUSDT", "XRP-USD": "XRPUSDT"
-    }
-    binance_symbol = symbol_map.get(coin_choose, "BTCUSDT")
+    symbol_clean = coin_choose.replace("-", "")
+    if symbol_clean == "BTCUSD": symbol_clean = "BINANCE:BTCUSDT"
+    elif symbol_clean == "ETHUSD": symbol_clean = "BINANCE:ETHUSDT"
+    elif symbol_clean == "SOLUSD": symbol_clean = "BINANCE:SOLUSDT"
+    elif symbol_clean == "BNBUSD": symbol_clean = "BINANCE:BNBUSDT"
+    elif symbol_clean == "XRPUSD": symbol_clean = "BINANCE:XRPUSDT"
+
+    interval_map = {"1m": "1", "5m": "5", "15m": "15", "1h": "60", "1d": "D"}
+    tv_interval = interval_map.get(time_frame, "1")
 
     with body_col_chart:
         if indicator == "Local S&R Edge Scanner (Upload Snapshot)" and cv2 is not None:
@@ -180,70 +188,38 @@ else:
         else:
             st.markdown(f"<span style='color:#848e9c;'>Active Tool:</span> <b style='color:#00ffcc;'>{st.session_state.active_tool} Mode</b>", unsafe_allow_html=True)
             
-            live_terminal_html = f"""
+            tradingview_html = f"""
             <!DOCTYPE html>
             <html>
             <head>
-                <script src="https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.1.1/lightweight-charts.standalone.production.js"></script>
                 <style>
-                    html, body {{ margin: 0; padding: 0; width: 100%; height: 100%; background-color: #131722 !important; overflow: hidden; }}
-                    #chart_container {{ width: 100%; height: 620px; background-color: #131722; }}
+                    html, body {{ margin: 0; padding: 0; width: 100%; height: 100%; background-color: #131722; overflow: hidden; }}
+                    .tradingview-widget-container {{ width: 100%; height: 620px; }}
                 </style>
             </head>
-            <body style="background-color: #131722;">
-                <div id="chart_container"></div>
-                <script>
-                    const container = document.getElementById('chart_container');
-                    const chart = LightweightCharts.createChart(container, {{
-                        width: container.clientWidth,
-                        height: 620,
-                        layout: {{ background: {{ type: 'solid', color: '#131722' }}, textColor: '#d1d4dc', fontSize: 12 }},
-                        grid: {{ vertLines: {{ color: '#1f222e' }}, horzLines: {{ color: '#1f222e' }} }},
-                        priceScale: {{ borderColor: '#2a2e39' }},
-                        timeScale: {{ borderColor: '#2a2e39', timeVisible: true }}
+            <body>
+                <div class="tradingview-widget-container">
+                    <div id="tradingview_chart"></div>
+                    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+                    <script type="text/javascript">
+                    new TradingView.widget({{
+                        "width": "100%",
+                        "height": 620,
+                        "symbol": "{symbol_clean}",
+                        "interval": "{tv_interval}",
+                        "timezone": "Etc/UTC",
+                        "theme": "dark",
+                        "style": "1",
+                        "locale": "en",
+                        "enable_publishing": false,
+                        "hide_side_toolbar": false,
+                        "allow_symbol_change": false,
+                        "container_id": "tradingview_chart"
                     }});
-
-                    const candleSeries = chart.addCandlestickSeries({{
-                        upColor: '#26a69a', downColor: '#ef5350',
-                        borderUpColor: '#26a69a', borderDownColor: '#ef5350',
-                        wickUpColor: '#26a69a', wickDownColor: '#ef5350'
-                    }});
-
-                    const symbol = "{binance_symbol}";
-                    const interval = "{time_frame}";
-
-                    fetch(`https://api.binance.com/api/v3/klines?symbol=${{symbol}}&interval=${{interval}}&limit=500`)
-                        .then(res => res.json())
-                        .then(data => {{
-                            const historicalData = data.map(d => ({{
-                                time: d[0] / 1000,
-                                open: parseFloat(d[1]),
-                                high: parseFloat(d[2]),
-                                low: parseFloat(d[3]),
-                                close: parseFloat(d[4])
-                            }}));
-                            candleSeries.setData(historicalData);
-
-                            const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${{symbol.toLowerCase()}}@kline_${{interval}}`);
-                            ws.onmessage = (event) => {{
-                                const message = JSON.parse(event.data);
-                                const kline = message.k;
-                                candleSeries.update({{
-                                    time: kline.t / 1000,
-                                    open: parseFloat(kline.o),
-                                    high: parseFloat(kline.h),
-                                    low: parseFloat(kline.l),
-                                    close: parseFloat(kline.c)
-                                }});
-                            }};
-                        }}).catch(err => console.error("Data Hub Connectivity Error: ", err));
-
-                    window.addEventListener('resize', () => {{
-                        chart.resize(container.clientWidth, 620);
-                    }});
-                </script>
+                    </script>
+                </div>
             </body>
             </html>
             """
             import streamlit.components.v1 as components
-            components.html(live_terminal_html, height=630, scrolling=False)
+            components.html(tradingview_html, height=630, scrolling=False)
