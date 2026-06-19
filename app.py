@@ -1,10 +1,18 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import cv2
 import json
 from PIL import Image
-from supabase import create_client, Client
+
+try:
+    import cv2
+except ImportError:
+    cv2 = None
+
+try:
+    from supabase import create_client, Client
+except ImportError:
+    Client = None
 
 st.set_page_config(
     page_title="ChartVision.AI Ultimate Terminal",
@@ -63,17 +71,21 @@ st.markdown("""
         padding: 20px;
         margin-top: 15px;
     }
+    html, body, [data-testid="stCanvasBlockContainer"] {
+        background-color: #131722 !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-def init_supabase() -> Client:
-    return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
+def init_supabase():
+    if Client is not None and "SUPABASE_URL" in st.secrets and "SUPABASE_KEY" in st.secrets:
+        return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
+    return None
 
 try:
     supabase = init_supabase()
-except Exception as e:
-    st.error(f"Supabase Connection Failure: {e}")
-    st.stop()
+except Exception:
+    supabase = None
 
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
@@ -82,7 +94,7 @@ if 'user_email' not in st.session_state:
 if 'active_tool' not in st.session_state:
     st.session_state.active_tool = "Crosshair"
 
-if not st.session_state.logged_in:
+if not st.session_state.logged_in and supabase is not None:
     st.markdown("<h2 style='text-align: center; color: #ffffff;'>🔒 ChartVision.AI Secure Gateway</h2>", unsafe_allow_html=True)
     col_l, col_main, col_r = st.columns()
     with col_main:
@@ -104,13 +116,13 @@ if not st.session_state.logged_in:
             if st.button("Register Account", use_container_width=True):
                 try:
                     response = supabase.auth.sign_up({"email": signup_email, "password": signup_password})
-                    st.success("Registration Successful! Jump into Sign In tab.")
+                    st.success("Registration Successful!")
                 except Exception as e:
                     st.error(f"Registration Failed: {e}")
 
 else:
     with st.container():
-        top_col1, top_col2, top_col3, top_col4, top_col5, top_logout = st.columns()
+        top_col1, top_col2, top_col3, top_col4, top_col5 = st.columns()
         
         with top_col1:
             coin_choose = st.selectbox("Coin Choose:", ["BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD", "XRP-USD"])
@@ -122,11 +134,6 @@ else:
             indicator = st.selectbox("Indicator:", ["None Overlay", "Local S&R Edge Scanner (Upload Snapshot)", "Moving Average (EMA 20/50)"])
         with top_col5:
             choose_key = st.text_input("Choose Key:", value="Default_Core_Key", type="password")
-        with top_logout:
-            st.write("")
-            if st.button("🚪 Exit"):
-                st.session_state.logged_in = False
-                st.rerun()
 
     st.markdown("<hr style='margin:5px 0 15px 0; border-color:#2a2e39;'>", unsafe_allow_html=True)
 
@@ -155,7 +162,7 @@ else:
     binance_symbol = symbol_map.get(coin_choose, "BTCUSDT")
 
     with body_col_chart:
-        if indicator == "Local S&R Edge Scanner (Upload Snapshot)":
+        if indicator == "Local S&R Edge Scanner (Upload Snapshot)" and cv2 is not None:
             st.subheader("📷 Local Snapshot Edge Detector Canvas")
             uploaded_file = st.file_uploader("Upload static screenshot:", type=["png", "jpg", "jpeg"])
             if uploaded_file is not None:
@@ -177,13 +184,13 @@ else:
             <!DOCTYPE html>
             <html>
             <head>
-                <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+                <script src="https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.1.1/lightweight-charts.standalone.production.js"></script>
                 <style>
-                    html, body {{ margin: 0; padding: 0; width: 100%; height: 100%; background-color: #131722; overflow: hidden; }}
-                    #chart_container {{ width: 100%; height: 620px; }}
+                    html, body {{ margin: 0; padding: 0; width: 100%; height: 100%; background-color: #131722 !important; overflow: hidden; }}
+                    #chart_container {{ width: 100%; height: 620px; background-color: #131722; }}
                 </style>
             </head>
-            <body>
+            <body style="background-color: #131722;">
                 <div id="chart_container"></div>
                 <script>
                     const container = document.getElementById('chart_container');
