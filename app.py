@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 import numpy as np
 
 st.set_page_config(
-    page_title="ChartVision.AI", 
+    page_title="ChartVision.AI Premium Terminal", 
     page_icon="📊", 
     layout="wide", 
     initial_sidebar_state="expanded"
@@ -15,39 +15,46 @@ st.set_page_config(
 st.markdown("""
     <style>
     .stApp {
-        background-color: #0B0E14 !important;
-        color: #E0E6ED !important;
+        background-color: #131722 !important;
+        color: #d1d4dc !important;
     }
     [data-testid="stSidebar"] {
-        background-color: #11151D !important;
+        background-color: #1c2030 !important;
+        border-right: 1px solid #2a2e39 !important;
     }
     label, .stWidgetLabel p {
-        color: #FFFFFF !important;
+        color: #848e9c !important;
         font-weight: 500 !important;
+        font-size: 13px !important;
     }
-    div[data-baseweb="input"], div[data-baseweb="select"], div[data-baseweb="textarea"] {
-        background-color: #1A1F2C !important;
-        border: 1px solid #2D3748 !important;
+    div[data-baseweb="input"], div[data-baseweb="select"], div[data-baseweb="color-picker"] {
+        background-color: #1e222d !important;
+        border: 1px solid #2a2e39 !important;
+        border-radius: 4px !important;
     }
-    input, textarea, select {
-        color: #FFFFFF !important;
-        -webkit-text-fill-color: #FFFFFF !important;
+    .tv-panel {
+        background-color: #1c2030;
+        border: 1px solid #2a2e39;
+        border-radius: 6px;
+        padding: 16px;
+        margin-bottom: 12px;
     }
-    .analysis-card {
-        background-color: #11151D;
-        border: 1px solid #1A1F2C;
-        padding: 20px;
-        border-radius: 10px;
-        margin-bottom: 15px;
+    .tv-stat-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 0;
+        border-bottom: 1px solid #2a2e39;
+        font-size: 13px;
     }
-    div[data-testid="stMetric"] {
-        background-color: #11151D !important;
-        border: 1px solid #1A1F2C !important;
-        padding: 15px !important;
-        border-radius: 8px !important;
+    .tv-stat-label {
+        color: #787b86;
+    }
+    .tv-stat-value {
+        color: #d1d4dc;
+        font-weight: bold;
     }
     
-    /* --- STOP STREAMLIT REFRESH FLASHING --- */
+    /* --- PREVENT REFRESH FLICKERING --- */
     div[data-fragment-id] {
         opacity: 1 !important;
         filter: none !important;
@@ -71,18 +78,24 @@ except Exception as e:
     st.error(f"Supabase Connection Error: {e}")
     st.stop()
 
+def hex_to_rgba(hex_str, opacity=0.1):
+    hex_str = hex_str.lstrip('#')
+    lv = len(hex_str)
+    if lv == 6:
+        rgb = tuple(int(hex_str[i:i + 2], 16) for i in range(0, 6, 2))
+    else:
+        rgb = (38, 166, 154)
+    return f"rgba({rgb[0]}, {rgb[1]}, {rgb[2]}, {opacity})"
+
+
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 if 'user_email' not in st.session_state:
     st.session_state.user_email = ""
 
-
 if not st.session_state.logged_in:
     st.title("🔒 ChartVision.AI - Secure Login")
-    st.write("### Please Login or Sign Up to access the Pro Trading Tool")
-
     tab1, tab2 = st.tabs(["🔑 Login", "📝 Sign Up"])
-
     with tab1:
         login_email = st.text_input("Email Address", key="login_email_input")
         login_password = st.text_input("Password", type="password", key="login_pw_input")
@@ -94,53 +107,66 @@ if not st.session_state.logged_in:
                 st.rerun()
             except Exception as e:
                 st.error(f"Login Failed: {e}")
-
     with tab2:
         signup_email = st.text_input("Enter Your Email Address", key="signup_email_input")
         signup_password = st.text_input("Enter Password", type="password", key="signup_pw_input")
         if st.button("Create Account", use_container_width=True):
             try:
                 response = supabase.auth.sign_up({"email": signup_email, "password": signup_password})
-                st.success("Sign Up Successful! Go to Login tab.")
+                st.success("Sign Up Successful!")
             except Exception as e:
                 st.error(f"Sign Up Failed: {e}")
 
 else:
-    st.sidebar.write(f"👤 Logged in as: {st.session_state.user_email}")
-    if st.sidebar.button("Log Out", type="primary", use_container_width=True):
+    st.sidebar.markdown(f"🟢 **Premium Active**<br><small style='color:#787b86;'>{st.session_state.user_email}</small>", unsafe_allow_html=True)
+    if st.sidebar.button("Sign Out Terminal", type="secondary", use_container_width=True):
         st.session_state.logged_in = False
         st.session_state.user_email = ""
         st.rerun()
 
     st.sidebar.markdown("---")
-    
-    ticker = st.sidebar.text_input("Enter Ticker:", value="BTC-USD", key="ticker_input_field")
-    timeframe = st.sidebar.selectbox("Select Timeframe:", options=["1m", "5m", "15m", "30m", "1h", "1d"], index=3, key="tf_select_field") 
-    period = st.sidebar.selectbox("Select Period:", options=["1d", "5d", "1mo", "3mo", "1y", "max"], index=2, key="pr_select_field")
-    
-    st.sidebar.markdown("---")
-    st.sidebar.write("### 🛠️ Smart Money & Chart Tools")
-    
-    show_sr = st.sidebar.toggle("🎯 Auto-Snap S&R Lines", value=False)
-    show_trendlines = st.sidebar.toggle("📈 Auto-Trendlines & Breakouts", value=False)
-    show_ob = st.sidebar.toggle("🛡️ Unmitigated Order Blocks (OB)", value=False)
-    show_fvg = st.sidebar.toggle("🕳️ Unfilled Fair Value Gaps (FVG)", value=False)
+    ticker = st.sidebar.text_input("Symbol:", value="BTC-USD")
+    timeframe = st.sidebar.selectbox("Interval:", options=["1m", "5m", "15m", "30m", "1h", "1d"], index=4) 
+    period = st.sidebar.selectbox("Range:", options=["1d", "5d", "1mo", "3mo", "1y", "max"], index=2)
     
     st.sidebar.markdown("---")
-    live_mode = st.sidebar.toggle("🔴 Live Market Update (Auto-Refresh)", value=True)
-    refresh_rate = 10 if live_mode else None
+    st.sidebar.write("### 🛠️ Chart Tools Activation")
+    show_sr = st.sidebar.toggle("🎯 Auto-Snap S&R Lines", value=True)
+    show_trendlines = st.sidebar.toggle("📈 Auto-Trendlines & Breakouts", value=True)
+    show_ob = st.sidebar.toggle("🛡️ Smart Money Order Blocks", value=True)
+    show_fvg = st.sidebar.toggle("🕳️ Fair Value Gaps (FVG)", value=False)
+    
+    st.sidebar.markdown("---")
+    with st.sidebar.expander("🎨 Chart Style Settings (Custom Colors)"):
+        c_bull = st.color_picker("Bullish Candle Color", value="#26a69a")
+        c_bear = st.color_picker("Bearish Candle Color", value="#ef5350")
+        c_res = st.color_picker("Resistance Geometry Line", value="#ef5350")
+        c_sup = st.color_picker("Support Geometry Line", value="#26a69a")
+        c_ob_bull = st.color_picker("Bullish Order Block Base", value="#26a69a")
+        c_ob_bear = st.color_picker("Bearish Order Block Base", value="#ef5350")
 
-    st.title("📊 ChartVision.AI - Smart Money Concepts Dashboard")
+    st.sidebar.markdown("---")
+    live_mode = st.sidebar.toggle("🔴 Live Streaming Updates", value=True)
 
-    if live_mode:
-        st.info("💡 **To stretch/extend OB & FVG boxes freely:** Turn OFF 'Live Market Update' on the sidebar so your manual adjustments won't reset.")
-    else:
-        st.success("🎨 **Interactive Mode Active:** Click once on any generated box and grab its edges to stretch or resize it into the future!")
+    refresh_rate = 2 if live_mode else None
 
-    live_ui_placeholder = st.empty()
+    chart_col, side_panel_col = st.columns([3.8, 1.2])
+
+    with chart_col:
+        st.markdown(f"<h2 style='margin:0; font-weight:600; color:#ffffff;'>📊 {ticker} Live Terminal Space</h2>", unsafe_allow_html=True)
+        if live_mode:
+            st.caption("⚡ Turbo Live Stream Engine Active (2s updates). Turn off to freeze custom drawing state.")
+        else:
+            st.caption("🎨 Interactive Mode: Grab edges to extend custom geometric structures manually.")
+            
+        chart_placeholder = st.empty()
+
+    with side_panel_col:
+        st.markdown("<h3 style='margin:0; font-weight:600; color:#ffffff;'>Watchlist & Stats</h3>", unsafe_allow_html=True)
+        panel_placeholder = st.empty()
 
     @st.fragment(run_every=refresh_rate)
-    def render_smart_dashboard(tk, tf, pr, s_sr, s_tl, s_ob, s_fvg):
+    def update_terminal_matrix(tk, tf, pr, s_sr, s_tl, s_ob, s_fvg, cbull, cbear, cres, csup, cob_bull, cob_bear):
         if not tk.strip():
             return
 
@@ -164,14 +190,35 @@ else:
             high_series = extract_ticker_series(data, 'High').dropna()
             low_series = extract_ticker_series(data, 'Low').dropna()
             open_series = extract_ticker_series(data, 'Open').dropna()
+            volume_series = extract_ticker_series(data, 'Volume').dropna()
 
             if len(close_series) < 20:
                 return
 
             fig = go.Figure()
+            
             fig.add_trace(go.Candlestick(
-                x=close_series.index, open=open_series, high=high_series, low=low_series, close=close_series, name=tk
+                x=close_series.index, open=open_series, high=high_series, low=low_series, close=close_series,
+                name=tk, increasing_line_color=cbull, decreasing_line_color=cbear,
+                increasing_fillcolor=cbull, decreasing_fillcolor=cbear
             ))
+
+            current_price = float(close_series.iloc[-1])
+            prev_price = float(close_series.iloc[-2])
+            price_change = ((current_price - prev_price) / prev_price) * 100
+            current_vol = float(volume_series.iloc[-1])
+
+            active_color = cbull if current_price >= open_series.iloc[-1] else cbear
+            fig.add_hline(
+                y=current_price, 
+                line_color=active_color, 
+                line_width=1.2, 
+                line_dash="dash",
+                annotation_text=f" {current_price:,.2f} ",
+                annotation_position="right",
+                annotation_font=dict(color="#ffffff", size=11, family="Courier New"),
+                annotation_bgcolor=active_color
+            )
 
             lookback = min(len(close_series), 60)
             r2 = float(high_series.iloc[-lookback:].quantile(0.92))
@@ -181,30 +228,28 @@ else:
             s2 = float(low_series.iloc[-lookback:].quantile(0.08))
 
             if s_sr:
-                fig.add_hline(y=r2, line_dash="dash", line_color="#00FF66", line_width=1.5, annotation_text=" R2")
-                fig.add_hline(y=r1, line_dash="solid", line_color="#00CC52", line_width=1, annotation_text=" R1")
-                fig.add_hline(y=pivot, line_dash="dot", line_color="#FF9900", line_width=1, annotation_text=" PP")
-                fig.add_hline(y=s1, line_dash="solid", line_color="#FF3333", line_width=1, annotation_text=" S1")
-                fig.add_hline(y=s2, line_dash="dash", line_color="#CC0000", line_width=1.5, annotation_text=" S2")
+                fig.add_hline(y=r2, line_dash="dash", line_color=cres, line_width=1, annotation_text="R2")
+                fig.add_hline(y=r1, line_dash="solid", line_color=cres, line_width=0.8, annotation_text="R1")
+                fig.add_hline(y=pivot, line_dash="dot", line_color="rgba(255, 153, 0, 0.4)", line_width=1)
+                fig.add_hline(y=s1, line_dash="solid", line_color=csup, line_width=0.8, annotation_text="S1")
+                fig.add_hline(y=s2, line_dash="dash", line_color=csup, line_width=1, annotation_text="S2")
 
             if s_tl:
                 window = 10
                 high_peaks = high_series[(high_series == high_series.rolling(window=window, center=True).max())].dropna()
                 low_troughs = low_series[(low_series == low_series.rolling(window=window, center=True).min())].dropna()
-
                 breakout_buys = []
                 breakout_sells = []
 
                 if len(high_peaks) >= 2:
                     p1_idx, p2_idx = high_peaks.index[-2], high_peaks.index[-1]
-                    p1_val, p2_val = high_peaks.iloc[-2], high_peaks.iloc[-1]
                     x_vals = np.arange(len(close_series))
                     idx_map = {date: i for i, date in enumerate(close_series.index)}
                     x1, x2 = idx_map[p1_idx], idx_map[p2_idx]
-                    m = (p2_val - p1_val) / (x2 - x1)
-                    c = p1_val - m * x1
+                    m = (high_peaks.iloc[-1] - high_peaks.iloc[-2]) / (x2 - x1)
+                    c = high_peaks.iloc[-2] - m * x1
                     res_trend = m * x_vals + c
-                    fig.add_trace(go.Scatter(x=close_series.index[max(x1, 0):], y=res_trend[max(x1, 0):], line=dict(color="#FF00CC", width=1.5, dash="dash"), name="Resistance Trend"))
+                    fig.add_trace(go.Scatter(x=close_series.index[max(x1, 0):], y=res_trend[max(x1, 0):], line=dict(color=cres, width=1.2, dash="dash"), name="Trend Resistance"))
                     
                     for i in range(x2 + 1, len(close_series)):
                         if close_series.iloc[i] > res_trend[i] and close_series.iloc[i-1] <= res_trend[i-1]:
@@ -212,127 +257,89 @@ else:
 
                 if len(low_troughs) >= 2:
                     t1_idx, t2_idx = low_troughs.index[-2], low_troughs.index[-1]
-                    t1_val, t2_val = low_troughs.iloc[-2], low_troughs.iloc[-1]
                     idx_map = {date: i for i, date in enumerate(close_series.index)}
                     x_vals = np.arange(len(close_series))
                     x1, x2 = idx_map[t1_idx], idx_map[t2_idx]
-                    m = (t2_val - t1_val) / (x2 - x1)
-                    c = t1_val - m * x1
+                    m = (low_troughs.iloc[-1] - low_troughs.iloc[-2]) / (x2 - x1)
+                    c = low_troughs.iloc[-2] - m * x1
                     sup_trend = m * x_vals + c
-                    fig.add_trace(go.Scatter(x=close_series.index[max(x1, 0):], y=sup_trend[max(x1, 0):], line=dict(color="#00FFFF", width=1.5, dash="dash"), name="Support Trend"))
+                    fig.add_trace(go.Scatter(x=close_series.index[max(x1, 0):], y=sup_trend[max(x1, 0):], line=dict(color=csup, width=1.2, dash="dash"), name="Trend Support"))
 
                     for i in range(x2 + 1, len(close_series)):
                         if close_series.iloc[i] < sup_trend[i] and close_series.iloc[i-1] >= sup_trend[i-1]:
                             breakout_sells.append(close_series.index[i])
 
                 if breakout_buys:
-                    fig.add_trace(go.Scatter(x=breakout_buys, y=high_series.loc[breakout_buys] * 1.002, mode="markers", marker=dict(symbol="triangle-down", size=14, color="#00FF66"), name="Bullish Breakout"))
+                    fig.add_trace(go.Scatter(x=breakout_buys, y=high_series.loc[breakout_buys] * 1.002, mode="markers", marker=dict(symbol="triangle-down", size=12, color=cbull), showlegend=False))
                 if breakout_sells:
-                    fig.add_trace(go.Scatter(x=breakout_sells, y=low_series.loc[breakout_sells] * 0.998, mode="markers", marker=dict(symbol="triangle-up", size=14, color="#FF3333"), name="Bearish Breakdown"))
+                    fig.add_trace(go.Scatter(x=breakout_sells, y=low_series.loc[breakout_sells] * 0.998, mode="markers", marker=dict(symbol="triangle-up", size=12, color=cbear), showlegend=False))
 
             if s_ob:
                 bullish_obs = []
                 bearish_obs = []
-                
                 for i in range(len(close_series) - 3, max(1, len(close_series) - 50), -1):
                     if close_series.iloc[i] > open_series.iloc[i] and (close_series.iloc[i] - open_series.iloc[i]) > (high_series.iloc[i] - low_series.iloc[i]) * 0.5:
                         if close_series.iloc[i-1] < open_series.iloc[i-1]:
-                            ob_low = low_series.iloc[i-1]
-                            ob_high = high_series.iloc[i-1]
-                            subsequent_lows = low_series.iloc[i:]
-                            if not (subsequent_lows < ob_low).any():
-                                bullish_obs.append((close_series.index[i-1], ob_low, ob_high))
-                                if len(bullish_obs) >= 3: break
-
-                for i in range(len(close_series) - 3, max(1, len(close_series) - 50), -1):
-                    if close_series.iloc[i] < open_series.iloc[i] and (open_series.iloc[i] - close_series.iloc[i]) > (high_series.iloc[i] - low_series.iloc[i]) * 0.5:
-                        if close_series.iloc[i-1] > open_series.iloc[i-1]:
-                            ob_low = low_series.iloc[i-1]
-                            ob_high = high_series.iloc[i-1]
-                            subsequent_highs = high_series.iloc[i:]
-                            if not (subsequent_highs > ob_high).any():
-                                bearish_obs.append((close_series.index[i-1], ob_low, ob_high))
-                                if len(bearish_obs) >= 3: break
+                            ob_l, ob_h = low_series.iloc[i-1], high_series.iloc[i-1]
+                            if not (low_series.iloc[i:] < ob_l).any():
+                                bullish_obs.append((close_series.index[i-1], ob_l, ob_h))
+                                if len(bullish_obs) >= 2: break
 
                 for ob in bullish_obs:
-                    fig.add_shape(type="rect", x0=ob[0], y0=ob[1], x1=close_series.index[-1], y1=ob[2], fillcolor="rgba(0, 255, 102, 0.08)", line=dict(color="rgba(0, 255, 102, 0.3)", width=1))
-                for ob in bearish_obs:
-                    fig.add_shape(type="rect", x0=ob[0], y0=ob[1], x1=close_series.index[-1], y1=ob[2], fillcolor="rgba(255, 51, 51, 0.08)", line=dict(color="rgba(255, 51, 51, 0.3)", width=1))
+                    fig.add_shape(type="rect", x0=ob[0], y0=ob[1], x1=close_series.index[-1], y1=ob[2], fillcolor=hex_to_rgba(cob_bull, 0.08), line=dict(color=cob_bull, width=1))
 
-            if s_fvg:
-                for i in range(len(close_series) - 3):
-                    if high_series.iloc[i] < low_series.iloc[i+2] and close_series.iloc[i+1] > open_series.iloc[i+1]:
-                        gap_bottom = high_series.iloc[i]
-                        gap_top = low_series.iloc[i+2]
-                        future_lows = low_series.iloc[i+2:]
-                        if not (future_lows <= gap_bottom).any():
-                            fig.add_shape(type="rect", x0=close_series.index[i+1], y0=gap_bottom, x1=close_series.index[-1], y1=gap_top, fillcolor="rgba(0, 255, 204, 0.05)", line=dict(width=0))
-                    
-                    if low_series.iloc[i] > high_series.iloc[i+2] and close_series.iloc[i+1] < open_series.iloc[i+1]:
-                        gap_top = low_series.iloc[i]
-                        gap_bottom = high_series.iloc[i+2]
-                        future_highs = high_series.iloc[i+2:]
-                        if not (future_highs >= gap_top).any():
-                            fig.add_shape(type="rect", x0=close_series.index[i+1], y0=gap_bottom, x1=close_series.index[-1], y1=gap_top, fillcolor="rgba(255, 153, 0, 0.05)", line=dict(width=0))
+            time_delta = close_series.index[-1] - close_series.index[-2] if len(close_series) > 1 else pd.Timedelta(minutes=1)
+            future_padding_end = close_series.index[-1] + (time_delta * 8) # Adds 8 bars worth of blank timeline space to the right
+            start_visible_view = close_series.index[-min(len(close_series), 45)]
 
             fig.update_layout(
-                template="plotly_dark", paper_bgcolor="#0B0E14", plot_bgcolor="#0B0E14",
-                xaxis_rangeslider_visible=False, height=650, margin=dict(l=20, r=20, t=20, b=20),
-                uirevision=tk
+                template="plotly_dark", paper_bgcolor="#131722", plot_bgcolor="#131722",
+                xaxis_rangeslider_visible=False, height=620, margin=dict(l=10, r=10, t=10, b=10),
+                uirevision=tk,
+                xaxis=dict(gridcolor="#2a2e39", linecolor="#2a2e39", range=[start_visible_view, future_padding_end]),
+                yaxis=dict(gridcolor="#2a2e39", linecolor="#2a2e39", side="right")
             )
 
-            current_price = float(close_series.iloc[-1])
-            prev_price = float(close_series.iloc[-2])
-            price_change = ((current_price - prev_price) / prev_price) * 100
+            delta = close_series.diff()
+            gain = (delta.where(delta > 0, 0)).ewm(span=14, adjust=False).mean()
+            loss = (-delta.where(delta < 0, 0)).ewm(span=14, adjust=False).mean()
+            rsi = 100 - (100 / (1 + (gain / (loss + 1e-10))))
+            current_rsi = float(rsi.iloc[-1])
 
-            with live_ui_placeholder.container():
-                st.plotly_chart(
-                    fig, 
-                    use_container_width=True, 
-                    key="smc_dashboard_chart_canvas", 
-                    config={
-                        'editable': True, 
-                        'displaylogo': False, 
-                        'scrollZoom': True
-                    }
-                )
+            with chart_placeholder.container():
+                st.plotly_chart(fig, use_container_width=True, key="tv_custom_canvas", config={'editable': True, 'displaylogo': False, 'scrollZoom': True})
 
-                st.markdown("---")
-                st.write("## 🏛️ Smart Money Technical Matrix Data")
+            with panel_placeholder.container():
+                st.markdown(f"""
+                <div class="tv-panel">
+                    <div style="font-size:16px; font-weight:bold; margin-bottom:10px; color:#ffffff;">{tk} Live Feed</div>
+                    <div class="tv-stat-row"><span class="tv-stat-label">Last Price</span><span class="tv-stat-value" style="color:{cbull if price_change >=0 else cbear};">{current_price:,.2f}</span></div>
+                    <div class="tv-stat-row"><span class="tv-stat-label">Change %</span><span class="tv-stat-value" style="color:{cbull if price_change >=0 else cbear};">{price_change:+.2f}%</span></div>
+                    <div class="tv-stat-row"><span class="tv-stat-label">Volume (Bar)</span><span class="tv-stat-value">{current_vol:,.0f}</span></div>
+                </div>
                 
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric(label=f"Live {tk} Price", value=f"{current_price:,.2f}", delta=f"{price_change:+.2f}%")
-                with col2:
-                    st.metric(label="Structural Pivot Target", value=f"{pivot:,.2f}")
-                with col3:
-                    st.metric(label="Institutional Resistance (R1)", value=f"{r1:,.2f}")
-                with col4:
-                    st.metric(label="Institutional Support (S1)", value=f"{s1:,.2f}")
+                <div class="tv-panel">
+                    <div style="font-size:14px; font-weight:bold; margin-bottom:10px; color:#ffffff;">Key Matrix Stats</div>
+                    <div class="tv-stat-row"><span class="tv-stat-label">RSI (14)</span><span class="tv-stat-value">{current_rsi:.2f}</span></div>
+                    <div class="tv-stat-row"><span class="tv-stat-label">Pivot Point</span><span class="tv-stat-value">{pivot:,.2f}</span></div>
+                    <div class="tv-stat-row"><span class="tv-stat-label">Resistance R1</span><span class="tv-stat-value" style="color:{cbull};">{r1:,.2f}</span></div>
+                    <div class="tv-stat-row"><span class="tv-stat-label">Support S1</span><span class="tv-stat-value" style="color:{cbear};">{s1:,.2f}</span></div>
+                </div>
+                """, unsafe_allow_html=True)
                 
         except Exception as e:
             pass
 
-    render_smart_dashboard(ticker, timeframe, period, show_sr, show_trendlines, show_ob, show_fvg)
+    update_terminal_matrix(ticker, timeframe, period, show_sr, show_trendlines, show_ob, show_fvg, c_bull, c_bear, c_res, c_sup, c_ob_bull, c_ob_bear)
 
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    st.markdown("---")
-    st.write("## 💬 Developer Feedback & Feature Request Desk")
-    st.caption("Your recommendations directly build the system core. Submit bugs or feature ideas below:")
-    
-    with st.form("feedback_system_form", clear_on_submit=True):
-        fb_msg = st.text_area("What features should we add or fix next?", placeholder="Example: Add Fibonacci Retracements / Fix mobile sidebar layout...")
-        submit_fb = st.form_submit_button("Submit Pro Feedback", use_container_width=True)
-        
-        if submit_fb:
-            if fb_msg.strip():
-                try:
-                    supabase.table("feedback").insert({
-                        "email": st.session_state.user_email, 
-                        "message": fb_msg.strip()
-                    }).execute()
-                    st.success("🎯 Awesome! Your feedback was logged directly into the developer database. Thanks for improving ChartVision.AI!")
-                except Exception as e:
-                    st.error(f"Could not connect to database matrix: {e}")
-            else:
-                st.warning("Please type something before clicking submit!")
+    st.markdown("<br>", unsafe_allow_html=True)
+    with st.expander("💬 Submit Developer Bug Report / Feature Request Desk"):
+        with st.form("tv_feedback_form", clear_on_submit=True):
+            user_msg = st.text_area("Request Additional Terminal Feature Modifications:")
+            if st.form_submit_button("Send to Database Master Line"):
+                if user_msg.strip():
+                    try:
+                        supabase.table("feedback").insert({"email": st.session_state.user_email, "message": user_msg.strip()}).execute()
+                        st.success("Matrix Logged! Your terminal feature request has been securely transmitted.")
+                    except Exception as e:
+                        st.error(f"Transmission failed: {e}")
