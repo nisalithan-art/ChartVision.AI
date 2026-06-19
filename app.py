@@ -1,4 +1,4 @@
-import streamlit as st
+import streamlit as str
 import pandas as pd
 import yfinance as yf
 import json
@@ -105,22 +105,14 @@ else:
         data = yf.download(ticker.strip(), period=period, interval=timeframe, progress=False)
         
         if data is not None and not data.empty:
-            def extract_series(df, name):
-                if name in df.columns:
-                    series = df[name]
-                    return series.iloc[:, 0] if isinstance(series, pd.DataFrame) else series
-                if isinstance(df.columns, pd.MultiIndex):
-                    for c in df.columns:
-                        if name in c:
-                            series = df[c]
-                            return series.iloc[:, 0] if isinstance(series, pd.DataFrame) else series
-                return pd.Series(dtype=float)
+            if isinstance(data.columns, pd.MultiIndex):
+                data.columns = data.columns.get_level_values(0)
 
             df_clean = pd.DataFrame({
-                'open': extract_series(data, 'Open'),
-                'high': extract_series(data, 'High'),
-                'low': extract_series(data, 'Low'),
-                'close': extract_series(data, 'Close')
+                'open': data['Open'],
+                'high': data['High'],
+                'low': data['Low'],
+                'close': data['Close']
             }).dropna()
 
             df_clean['time'] = df_clean.index.astype('int64') // 10**9
@@ -152,21 +144,29 @@ else:
                 <meta charset="utf-8">
                 <style>
                     html, body {{ margin: 0; padding: 0; width: 100%; height: 100%; background-color: #131722; overflow: hidden; }}
-                    #custom_canvas {{ width: 100%; height: 680px; }}
+                    #custom_canvas {{ width: 100%; height: 680px; background-color: #131722; }}
                 </style>
                 <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
             </head>
             <body>
                 <div id="custom_canvas"></div>
                 <script>
-                    const chart = LightweightCharts.createChart(document.getElementById('custom_canvas'), {{
-                        width: document.getElementById('custom_canvas').clientWidth,
+                    const container = document.getElementById('custom_canvas');
+                    const chart = LightweightCharts.createChart(container, {{
+                        width: container.clientWidth,
                         height: 680,
-                        layout: {{ backgroundColor: '#131722', textColor: '#d1d4dc', fontSize: 12 }},
-                        grid: {{ vertLines: {{ color: '#1f222e' }}, horzLines: {{ color: '#1f222e' }} }},
+                        layout: {{
+                            background: {{ type: 'solid', color: '#131722' }},
+                            textColor: '#d1d4dc',
+                            fontSize: 12
+                        }},
+                        grid: {{
+                            vertLines: {{ color: '#1f222e' }},
+                            horzLines: {{ color: '#1f222e' }}
+                        }},
                         crosshair: {{ mode: LightweightCharts.CrosshairMode.Normal }},
-                        priceScale: {{ borderColor: '#2a2e39', scaleMargins: {{ top: 0.1, bottom: 0.1 }} }},
-                        timeScale: {{ borderColor: '#2a2e39', timeVisible: true, secondsVisible: false }}
+                        priceScale: {{ borderColor: '#2a2e39' }},
+                        timeScale: {{ borderColor: '#2a2e39', timeVisible: true }}
                     }});
 
                     const candleSeries = chart.addCandlestickSeries({{
@@ -191,7 +191,7 @@ else:
                     }}
 
                     window.addEventListener('resize', () => {{
-                        chart.resize(document.getElementById('custom_canvas').clientWidth, 680);
+                        chart.resize(container.clientWidth, 680);
                     }});
                 </script>
             </body>
