@@ -96,7 +96,7 @@ if 'active_tool' not in st.session_state:
 
 if not st.session_state.logged_in and supabase is not None:
     st.markdown("<h2 style='text-align: center; color: #ffffff;'>🔒 ChartVision.AI Secure Gateway</h2>", unsafe_allow_html=True)
-    col_l, col_main, col_r = st.columns()
+    col_l, col_main, col_r = st.columns([1, 2, 1])
     with col_main:
         tab1, tab2 = st.tabs(["🔑 Sign In", "📝 Create Account"])
         with tab1:
@@ -122,7 +122,7 @@ if not st.session_state.logged_in and supabase is not None:
 
 else:
     with st.container():
-        top_col1, top_col2, top_col3, top_col4, top_col5 = st.columns()
+        top_col1, top_col2, top_col3, top_col4, top_col5 = st.columns([2, 2, 2, 3, 3])
         
         with top_col1:
             coin_choose = st.selectbox("Coin Choose:", ["BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD", "XRP-USD"])
@@ -137,7 +137,7 @@ else:
 
     st.markdown("<hr style='margin:5px 0 15px 0; border-color:#2a2e39;'>", unsafe_allow_html=True)
 
-    body_col_tools, body_col_chart = st.columns()
+    body_col_tools, body_col_chart = st.columns([1, 15])
 
     with body_col_tools:
         st.markdown("<p style='font-size:11px; color:#848e9c; text-align:center; margin-bottom:10px;'>Tools</p>", unsafe_allow_html=True)
@@ -216,11 +216,11 @@ else:
                         .then(res => res.json())
                         .then(data => {{
                             const historicalData = data.map(d => ({{
-                                time: d / 1000,
-                                open: parseFloat(d),
-                                high: parseFloat(d),
-                                low: parseFloat(d),
-                                close: parseFloat(d)
+                                time: d[0] / 1000,
+                                open: parseFloat(d[1]),
+                                high: parseFloat(d[2]),
+                                low: parseFloat(d[3]),
+                                close: parseFloat(d[4])
                             }}));
                             candleSeries.setData(historicalData);
 
