@@ -1,225 +1,314 @@
 import streamlit as st
 import pandas as pd
+import yfinance as yf
+from supabase import create_client, Client
+import plotly.graph_objects as go
 import numpy as np
-import json
-from PIL import Image
-
-try:
-    import cv2
-except ImportError:
-    cv2 = None
-
-try:
-    from supabase import create_client, Client
-except ImportError:
-    Client = None
 
 st.set_page_config(
-    page_title="ChartVision.AI Ultimate Terminal",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="collapsed"
+    page_title="ChartVision.AI", 
+    page_icon="📊", 
+    layout="wide", 
+    initial_sidebar_state="expanded"
 )
-
 st.markdown("""
     <style>
     .stApp {
-        background-color: #131722 !important;
-        color: #d1d4dc !important;
+        background-color: #0B0E14 !important;
+        color: #E0E6ED !important;
     }
-    .top-bar-box {
-        background-color: #1c2030;
-        border-bottom: 1px solid #2a2e39;
-        padding: 10px;
-        margin-bottom: 10px;
-        border-radius: 4px;
+    [data-testid="stSidebar"] {
+        background-color: #11151D !important;
     }
-    .vertical-toolbar {
-        background-color: #1c2030;
-        border-right: 1px solid #2a2e39;
-        padding: 10px;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        border-radius: 4px;
+    label, .stWidgetLabel p {
+        color: #FFFFFF !important;
+        font-weight: 500 !important;
     }
-    div[data-baseweb="select"], div[data-baseweb="input"] {
-        background-color: #1e222d !important;
-        border: 1px solid #2a2e39 !important;
-        border-radius: 4px !important;
+    div[data-baseweb="input"], div[data-baseweb="select"], div[data-baseweb="textarea"] {
+        background-color: #1A1F2C !important;
+        border: 1px solid #2D3748 !important;
     }
-    .stButton>button {
-        background-color: #1e222d !important;
-        color: #d1d4dc !important;
-        border: 1px solid #2a2e39 !important;
-        width: 100% !important;
-        padding: 10px 5px !important;
+    input, textarea, select {
+        color: #FFFFFF !important;
+        -webkit-text-fill-color: #FFFFFF !important;
     }
-    .stButton>button:hover {
-        border-color: #00ffcc !important;
-        color: #00ffcc !important;
-    }
-    .delete-btn>div>button {
-        border-color: #ef5350 !important;
-        color: #ef5350 !important;
-    }
-    .analysis-box {
-        background-color: #1e222d;
-        border: 1px solid #00ffcc;
-        border-radius: 8px;
+    .analysis-card {
+        background-color: #11151D;
+        border: 1px solid #1A1F2C;
         padding: 20px;
-        margin-top: 15px;
+        border-radius: 10px;
+        margin-bottom: 15px;
     }
-    html, body, [data-testid="stCanvasBlockContainer"] {
-        background-color: #131722 !important;
+    div[data-testid="stMetric"] {
+        background-color: #11151D !important;
+        border: 1px solid #1A1F2C !important;
+        padding: 15px !important;
+        border-radius: 8px !important;
     }
-    iframe {
-        background-color: #131722 !important;
-        border: none !important;
+    
+    /* --- STOP STREAMLIT REFRESH FLASHING --- */
+    div[data-fragment-id] {
+        opacity: 1 !important;
+        filter: none !important;
+    }
+    [data-testid="stElementLoadingIndicator"], .stSpinner {
+        display: none !important;
+        visibility: hidden !important;
     }
     </style>
 """, unsafe_allow_html=True)
 
-def init_supabase():
-    if Client is not None and "SUPABASE_URL" in st.secrets and "SUPABASE_KEY" in st.secrets:
-        return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
-    return None
+
+def init_supabase() -> Client:
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
 
 try:
     supabase = init_supabase()
-except Exception:
-    supabase = None
+except Exception as e:
+    st.error(f"Supabase Connection Error: {e}")
+    st.stop()
 
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 if 'user_email' not in st.session_state:
     st.session_state.user_email = ""
-if 'active_tool' not in st.session_state:
-    st.session_state.active_tool = "Crosshair"
 
-if not st.session_state.logged_in and supabase is not None:
-    st.markdown("<h2 style='text-align: center; color: #ffffff;'>🔒 ChartVision.AI Secure Gateway</h2>", unsafe_allow_html=True)
-    col_l, col_main, col_r = st.columns([1, 2, 1])
-    with col_main:
-        tab1, tab2 = st.tabs(["🔑 Sign In", "📝 Create Account"])
-        with tab1:
-            login_email = st.text_input("Email Address", key="login_email")
-            login_password = st.text_input("Password", type="password", key="login_pw")
-            if st.button("Log In Securely", use_container_width=True):
-                try:
-                    response = supabase.auth.sign_in_with_password({"email": login_email, "password": login_password})
-                    st.session_state.logged_in = True
-                    st.session_state.user_email = login_email
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Authentication Failed: {e}")
-        with tab2:
-            signup_email = st.text_input("Enter Email Address", key="signup_email")
-            signup_password = st.text_input("Enter Password", type="password", key="signup_pw")
-            if st.button("Register Account", use_container_width=True):
-                try:
-                    response = supabase.auth.sign_up({"email": signup_email, "password": signup_password})
-                    st.success("Registration Successful!")
-                except Exception as e:
-                    st.error(f"Registration Failed: {e}")
+
+if not st.session_state.logged_in:
+    st.title("🔒 ChartVision.AI - Secure Login")
+    st.write("### Please Login or Sign Up to access the Pro Trading Tool")
+
+    tab1, tab2 = st.tabs(["🔑 Login", "📝 Sign Up"])
+
+    with tab1:
+        login_email = st.text_input("Email Address", key="login_email_input")
+        login_password = st.text_input("Password", type="password", key="login_pw_input")
+        if st.button("Log In", use_container_width=True):
+            try:
+                response = supabase.auth.sign_in_with_password({"email": login_email, "password": login_password})
+                st.session_state.logged_in = True
+                st.session_state.user_email = login_email
+                st.rerun()
+            except Exception as e:
+                st.error(f"Login Failed: {e}")
+
+    with tab2:
+        signup_email = st.text_input("Enter Your Email Address", key="signup_email_input")
+        signup_password = st.text_input("Enter Password", type="password", key="signup_pw_input")
+        if st.button("Create Account", use_container_width=True):
+            try:
+                response = supabase.auth.sign_up({"email": signup_email, "password": signup_password})
+                st.success("Sign Up Successful! Go to Login tab.")
+            except Exception as e:
+                st.error(f"Sign Up Failed: {e}")
 
 else:
-    with st.container():
-        top_col1, top_col2, top_col3, top_col4, top_col5 = st.columns([2, 2, 2, 3, 3])
-        
-        with top_col1:
-            coin_choose = st.selectbox("Coin Choose:", ["BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD", "XRP-USD"])
-        with top_col2:
-            st.markdown(f"<p style='margin-top:4px; font-size:12px; color:#848e9c;'>Coin Name</p><h4 style='margin:0; color:#00ffcc;'>{coin_choose}</h4>", unsafe_allow_html=True)
-        with top_col3:
-            time_frame = st.selectbox("Time Frame:", ["1m", "5m", "15m", "1h", "1d"], index=0)
-        with top_col4:
-            indicator = st.selectbox("Indicator:", ["None Overlay", "Local S&R Edge Scanner (Upload Snapshot)", "Moving Average (EMA 20/50)"])
-        with top_col5:
-            choose_key = st.text_input("Choose Key:", value="Default_Core_Key", type="password")
+    st.sidebar.write(f"👤 Logged in as: {st.session_state.user_email}")
+    if st.sidebar.button("Log Out", type="primary", use_container_width=True):
+        st.session_state.logged_in = False
+        st.session_state.user_email = ""
+        st.rerun()
 
-    st.markdown("<hr style='margin:5px 0 15px 0; border-color:#2a2e39;'>", unsafe_allow_html=True)
+    st.sidebar.markdown("---")
+    
+    ticker = st.sidebar.text_input("Enter Ticker:", value="BTC-USD", key="ticker_input_field")
+    timeframe = st.sidebar.selectbox("Select Timeframe:", options=["1m", "5m", "15m", "30m", "1h", "1d"], index=3, key="tf_select_field") 
+    period = st.sidebar.selectbox("Select Period:", options=["1d", "5d", "1mo", "3mo", "1y", "max"], index=2, key="pr_select_field")
+    
+    st.sidebar.markdown("---")
+    st.sidebar.write("### 🛠️ Smart Money & Chart Tools")
+    show_sr = st.sidebar.toggle("🎯 Auto-Snap S&R Lines", value=False)
+    show_trendlines = st.sidebar.toggle("📈 Auto-Trendlines & Breakouts", value=False)
+    show_ob = st.sidebar.toggle("🛡️ Unmitigated Order Blocks (OB)", value=False)
+    show_fvg = st.sidebar.toggle("🕳️ Unfilled Fair Value Gaps (FVG)", value=False)
+    
+    st.sidebar.markdown("---")
+    live_mode = st.sidebar.toggle("🔴 Live Market Update (Auto-Refresh)", value=True)
+    refresh_rate = 10 if live_mode else None
 
-    body_col_tools, body_col_chart = st.columns([1, 15])
+    st.title("📊 ChartVision.AI - Smart Money Concepts Dashboard")
+    st.write("### Toggle advanced institutional metrics and automated trend breakout markers from the sidebar.")
 
-    with body_col_tools:
-        st.markdown("<p style='font-size:11px; color:#848e9c; text-align:center; margin-bottom:10px;'>Tools</p>", unsafe_allow_html=True)
-        if st.button("🖱️\n\nPoint"): st.session_state.active_tool = "Crosshair"
-        if st.button("📈\n\nTrend"): st.session_state.active_tool = "Trendlines"
-        if st.button("🤖\n\nAuto"): st.session_state.active_tool = "Auto"
-        if st.button("🎯\n\nS & R"): st.session_state.active_tool = "S&R"
-        if st.button("🧩\n\nPattrn"): st.session_state.active_tool = "Chart Pattern"
-        
-        for _ in range(5): st.write("")
-        
-        st.markdown('<div class="delete-btn">', unsafe_allow_html=True)
-        if st.button("🗑️\n\nDel"):
-            st.session_state.active_tool = "Crosshair"
-            st.toast("Layout vectors flushed.")
-        st.markdown('</div>', unsafe_allow_html=True)
+    live_ui_placeholder = st.empty()
 
-    symbol_clean = coin_choose.replace("-", "")
-    if symbol_clean == "BTCUSD": symbol_clean = "BINANCE:BTCUSDT"
-    elif symbol_clean == "ETHUSD": symbol_clean = "BINANCE:ETHUSDT"
-    elif symbol_clean == "SOLUSD": symbol_clean = "BINANCE:SOLUSDT"
-    elif symbol_clean == "BNBUSD": symbol_clean = "BINANCE:BNBUSDT"
-    elif symbol_clean == "XRPUSD": symbol_clean = "BINANCE:XRPUSDT"
+    @st.fragment(run_every=refresh_rate)
+    def render_smart_dashboard(tk, tf, pr, s_sr, s_tl, s_ob, s_fvg):
+        if not tk.strip():
+            return
 
-    interval_map = {"1m": "1", "5m": "5", "15m": "15", "1h": "60", "1d": "D"}
-    tv_interval = interval_map.get(time_frame, "1")
+        try:
+            data = yf.download(tk.strip(), period=pr, interval=tf, progress=False)
+            if data.empty:
+                return
 
-    with body_col_chart:
-        if indicator == "Local S&R Edge Scanner (Upload Snapshot)" and cv2 is not None:
-            st.subheader("📷 Local Snapshot Edge Detector Canvas")
-            uploaded_file = st.file_uploader("Upload static screenshot:", type=["png", "jpg", "jpeg"])
-            if uploaded_file is not None:
-                file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-                img_bgr = cv2.imdecode(file_bytes, 1)
-                gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-                edges = cv2.Canny(gray, 50, 150)
-                row_sums = np.sum(edges, axis=1)
-                h, w = gray.shape
-                res_y = np.argmax(row_sums[int(h*0.2):int(h*0.5)]) + int(h*0.2)
-                sup_y = np.argmax(row_sums[int(h*0.5):int(h*0.8)]) + int(h*0.5)
-                cv2.line(img_bgr, (0, res_y), (w, res_y), (0, 0, 255), 3)
-                cv2.line(img_bgr, (0, sup_y), (w, sup_y), (0, 255, 0), 3)
-                st.image(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB), use_container_width=True)
-        else:
-            st.markdown(f"<span style='color:#848e9c;'>Active Tool:</span> <b style='color:#00ffcc;'>{st.session_state.active_tool} Mode</b>", unsafe_allow_html=True)
-            
-            tradingview_html = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <style>
-                    html, body {{ margin: 0; padding: 0; width: 100%; height: 100%; background-color: #131722; overflow: hidden; }}
-                    .tradingview-widget-container {{ width: 100%; height: 620px; }}
-                </style>
-            </head>
-            <body>
-                <div class="tradingview-widget-container">
-                    <div id="tradingview_chart"></div>
-                    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-                    <script type="text/javascript">
-                    new TradingView.widget({{
-                        "width": "100%",
-                        "height": 620,
-                        "symbol": "{symbol_clean}",
-                        "interval": "{tv_interval}",
-                        "timezone": "Etc/UTC",
-                        "theme": "dark",
-                        "style": "1",
-                        "locale": "en",
-                        "enable_publishing": false,
-                        "hide_side_toolbar": false,
-                        "allow_symbol_change": false,
-                        "container_id": "tradingview_chart"
-                    }});
-                    </script>
-                </div>
-            </body>
-            </html>
-            """
-            import streamlit.components.v1 as components
-            components.html(tradingview_html, height=630, scrolling=False)
+            def extract_ticker_series(df, col_name):
+                if col_name in df.columns:
+                    series_data = df[col_name]
+                    return series_data.iloc[:, 0] if isinstance(series_data, pd.DataFrame) else series_data
+                if isinstance(df.columns, pd.MultiIndex):
+                    for col in df.columns:
+                        if col_name in col:
+                            series_data = df[col]
+                            return series_data.iloc[:, 0] if isinstance(series_data, pd.DataFrame) else series_data
+                return pd.Series(dtype=float)
+
+            close_series = extract_ticker_series(data, 'Close').dropna()
+            high_series = extract_ticker_series(data, 'High').dropna()
+            low_series = extract_ticker_series(data, 'Low').dropna()
+            open_series = extract_ticker_series(data, 'Open').dropna()
+
+            if len(close_series) < 20:
+                return
+
+            fig = go.Figure()
+            fig.add_trace(go.Candlestick(
+                x=close_series.index, open=open_series, high=high_series, low=low_series, close=close_series, name=tk
+            ))
+
+            lookback = min(len(close_series), 60)
+            r2 = float(high_series.iloc[-lookback:].quantile(0.92))
+            r1 = float(high_series.iloc[-lookback:].quantile(0.78))
+            pivot = float(close_series.iloc[-lookback:].quantile(0.50))
+            s1 = float(low_series.iloc[-lookback:].quantile(0.22))
+            s2 = float(low_series.iloc[-lookback:].quantile(0.08))
+
+            if s_sr:
+                fig.add_hline(y=r2, line_dash="dash", line_color="#00FF66", line_width=1.5, annotation_text=" R2 (Major Resistance)")
+                fig.add_hline(y=r1, line_dash="solid", line_color="#00CC52", line_width=1, annotation_text=" R1 (Minor Resistance)")
+                fig.add_hline(y=pivot, line_dash="dot", line_color="#FF9900", line_width=1, annotation_text=" PP (Pivot)")
+                fig.add_hline(y=s1, line_dash="solid", line_color="#FF3333", line_width=1, annotation_text=" S1 (Minor Support)")
+                fig.add_hline(y=s2, line_dash="dash", line_color="#CC0000", line_width=1.5, annotation_text=" S2 (Major Support Floor)")
+
+            if s_tl:
+                window = 10
+                high_peaks = high_series[(high_series == high_series.rolling(window=window, center=True).max())].dropna()
+                low_troughs = low_series[(low_series == low_series.rolling(window=window, center=True).min())].dropna()
+
+                breakout_buys = []
+                breakout_sells = []
+
+                if len(high_peaks) >= 2:
+                    p1_idx, p2_idx = high_peaks.index[-2], high_peaks.index[-1]
+                    p1_val, p2_val = high_peaks.iloc[-2], high_peaks.iloc[-1]
+                    
+                    # Formulate trendline line formula: y = mx + c
+                    x_vals = np.arange(len(close_series))
+                    idx_map = {date: i for i, date in enumerate(close_series.index)}
+                    
+                    x1, x2 = idx_map[p1_idx], idx_map[p2_idx]
+                    m = (p2_val - p1_val) / (x2 - x1)
+                    c = p1_val - m * x1
+                    
+                    res_trend = m * x_vals + c
+                    
+                    fig.add_trace(go.Scatter(x=close_series.index[max(x1, 0):], y=res_trend[max(x1, 0):], line=dict(color="#FF00CC", width=1.5, dash="dash"), name="Resistance Trend"))
+
+                    for i in range(x2 + 1, len(close_series)):
+                        if close_series.iloc[i] > res_trend[i] and close_series.iloc[i-1] <= res_trend[i-1]:
+                            breakout_buys.append(close_series.index[i])
+
+                if len(low_troughs) >= 2:
+                    t1_idx, t2_idx = low_troughs.index[-2], low_troughs.index[-1]
+                    t1_val, t2_val = low_troughs.iloc[-2], low_troughs.iloc[-1]
+                    
+                    idx_map = {date: i for i, date in enumerate(close_series.index)}
+                    x_vals = np.arange(len(close_series))
+                    
+                    x1, x2 = idx_map[t1_idx], idx_map[t2_idx]
+                    m = (t2_val - t1_val) / (x2 - x1)
+                    c = t1_val - m * x1
+                    
+                    sup_trend = m * x_vals + c
+                    
+                    fig.add_trace(go.Scatter(x=close_series.index[max(x1, 0):], y=sup_trend[max(x1, 0):], line=dict(color="#00FFFF", width=1.5, dash="dash"), name="Support Trend"))
+
+                    for i in range(x2 + 1, len(close_series)):
+                        if close_series.iloc[i] < sup_trend[i] and close_series.iloc[i-1] >= sup_trend[i-1]:
+                            breakout_sells.append(close_series.index[i])
+
+                if breakout_buys:
+                    fig.add_trace(go.Scatter(x=breakout_buys, y=high_series.loc[breakout_buys] * 1.002, mode="markers", marker=dict(symbol="triangle-down", size=14, color="#00FF66"), name="Bullish Breakout"))
+                if breakout_sells:
+                    fig.add_trace(go.Scatter(x=breakout_sells, y=low_series.loc[breakout_sells] * 0.998, mode="markers", marker=dict(symbol="triangle-up", size=14, color="#FF3333"), name="Bearish Breakdown"))
+
+            if s_ob:
+                bullish_obs = []
+                bearish_obs = []
+
+                for i in range(len(close_series) - 3, max(1, len(close_series) - 50), -1):
+                    if close_series.iloc[i] > open_series.iloc[i] and (close_series.iloc[i] - open_series.iloc[i]) > (high_series.iloc[i] - low_series.iloc[i]) * 0.5:
+                        if close_series.iloc[i-1] < open_series.iloc[i-1]:
+                            ob_low = low_series.iloc[i-1]
+                            ob_high = high_series.iloc[i-1]
+
+                            subsequent_lows = low_series.iloc[i:]
+                            if not (subsequent_lows < ob_low).any():
+                                bullish_obs.append((close_series.index[i-1], ob_low, ob_high))
+                                if len(bullish_obs) >= 3: break # Limit to top 3 latest fresh zones
+
+                for i in range(len(close_series) - 3, max(1, len(close_series) - 50), -1):
+                    if close_series.iloc[i] < open_series.iloc[i] and (open_series.iloc[i] - close_series.iloc[i]) > (high_series.iloc[i] - low_series.iloc[i]) * 0.5:
+                        if close_series.iloc[i-1] > open_series.iloc[i-1]:
+                            ob_low = low_series.iloc[i-1]
+                            ob_high = high_series.iloc[i-1]
+
+                            subsequent_highs = high_series.iloc[i:]
+                            if not (subsequent_highs > ob_high).any():
+                                bearish_obs.append((close_series.index[i-1], ob_low, ob_high))
+                                if len(bearish_obs) >= 3: break
+
+                for ob in bullish_obs:
+                    fig.add_shape(type="rect", x0=ob[0], y0=ob[1], x1=close_series.index[-1], y1=ob[2], fillcolor="rgba(0, 255, 102, 0.08)", line=dict(color="rgba(0, 255, 102, 0.3)", width=1))
+                for ob in bearish_obs:
+                    fig.add_shape(type="rect", x0=ob[0], y0=ob[1], x1=close_series.index[-1], y1=ob[2], fillcolor="rgba(255, 51, 51, 0.08)", line=dict(color="rgba(255, 51, 51, 0.3)", width=1))
+
+            if s_fvg:
+                for i in range(len(close_series) - 3):
+                    if high_series.iloc[i] < low_series.iloc[i+2] and close_series.iloc[i+1] > open_series.iloc[i+1]:
+                        gap_bottom = high_series.iloc[i]
+                        gap_top = low_series.iloc[i+2]
+
+                        future_lows = low_series.iloc[i+2:]
+                        if not (future_lows <= gap_bottom).any():
+                            fig.add_shape(type="rect", x0=close_series.index[i+1], y0=gap_bottom, x1=close_series.index[-1], y1=gap_top, fillcolor="rgba(0, 255, 204, 0.05)", line=dict(width=0))
+
+                    if low_series.iloc[i] > high_series.iloc[i+2] and close_series.iloc[i+1] < open_series.iloc[i+1]:
+                        gap_top = low_series.iloc[i]
+                        gap_bottom = high_series.iloc[i+2]
+
+                        future_highs = high_series.iloc[i+2:]
+                        if not (future_highs >= gap_top).any():
+                            fig.add_shape(type="rect", x0=close_series.index[i+1], y0=gap_bottom, x1=close_series.index[-1], y1=gap_top, fillcolor="rgba(255, 153, 0, 0.05)", line=dict(width=0))
+
+            fig.update_layout(
+                template="plotly_dark", paper_bgcolor="#0B0E14", plot_bgcolor="#0B0E14",
+                xaxis_rangeslider_visible=False, height=650, margin=dict(l=20, r=20, t=20, b=20),
+                uirevision=tk
+            )
+
+            current_price = float(close_series.iloc[-1])
+            prev_price = float(close_series.iloc[-2])
+            price_change = ((current_price - prev_price) / prev_price) * 100
+
+            with live_ui_placeholder.container():
+                st.plotly_chart(fig, use_container_width=True, key="smc_dashboard_chart_canvas", config={'displaylogo': False, 'scrollZoom': True})
+
+                st.markdown("---")
+                st.write("## 🏛️ Smart Money Technical Matrix Data")
+                
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric(label=f"Live {tk} Price", value=f"{current_price:,.2f}", delta=f"{price_change:+.2f}%")
+                with col2:
+                    st.metric(label="Structural Pivot Target", value=f"{pivot:,.2f}")
+                with col3:
+                    st.metric(label="Institutional Resistance (R1)", value=f"{r1:,.2f}")
+                with col4:
+                    st.metric(label="Institutional Support (S1)", value=f"{s1:,.2f}")
+                
+        except Exception as e:
+            pass
+
+    render_smart_dashboard(ticker, timeframe, period, show_sr, show_trendlines, show_ob, show_fvg)
