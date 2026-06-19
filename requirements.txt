@@ -1,8 +1,5 @@
 streamlit
-yfinance
 pandas
 numpy
-plotly
-scipy
+opencv-python-headless
 supabase
-
