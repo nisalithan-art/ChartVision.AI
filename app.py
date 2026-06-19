@@ -2,8 +2,8 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 from supabase import create_client, Client
-import plotly.graph_objects as go
 import numpy as np
+from streamlit_lightweight_charts import renderLightweightCharts
 
 st.set_page_config(
     page_title="ChartVision.AI Premium Terminal", 
@@ -78,15 +78,6 @@ except Exception as e:
     st.error(f"Supabase Connection Error: {e}")
     st.stop()
 
-def hex_to_rgba(hex_str, opacity=0.1):
-    hex_str = hex_str.lstrip('#')
-    lv = len(hex_str)
-    if lv == 6:
-        rgb = tuple(int(hex_str[i:i + 2], 16) for i in range(0, 6, 2))
-    else:
-        rgb = (38, 166, 154)
-    return f"rgba({rgb[0]}, {rgb[1]}, {rgb[2]}, {opacity})"
-
 
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
@@ -147,7 +138,7 @@ else:
 
     st.sidebar.markdown("---")
     live_mode = st.sidebar.toggle("🔴 Live Streaming Updates", value=True)
-
+    
     refresh_rate = 2 if live_mode else None
 
     chart_col, side_panel_col = st.columns([3.8, 1.2])
@@ -157,7 +148,7 @@ else:
         if live_mode:
             st.caption("⚡ Turbo Live Stream Engine Active (2s updates). Turn off to freeze custom drawing state.")
         else:
-            st.caption("🎨 Interactive Mode: Grab edges to extend custom geometric structures manually.")
+            st.caption("🎨 Interactive Mode: TradingView Zooming & Panning enabled.")
             
         chart_placeholder = st.empty()
 
@@ -195,30 +186,10 @@ else:
             if len(close_series) < 20:
                 return
 
-            fig = go.Figure()
-            
-            fig.add_trace(go.Candlestick(
-                x=close_series.index, open=open_series, high=high_series, low=low_series, close=close_series,
-                name=tk, increasing_line_color=cbull, decreasing_line_color=cbear,
-                increasing_fillcolor=cbull, decreasing_fillcolor=cbear
-            ))
-
             current_price = float(close_series.iloc[-1])
             prev_price = float(close_series.iloc[-2])
             price_change = ((current_price - prev_price) / prev_price) * 100
             current_vol = float(volume_series.iloc[-1])
-
-            active_color = cbull if current_price >= open_series.iloc[-1] else cbear
-            fig.add_hline(
-                y=current_price, 
-                line_color=active_color, 
-                line_width=1.2, 
-                line_dash="dash",
-                annotation_text=f" {current_price:,.2f} ",
-                annotation_position="right",
-                annotation_font=dict(color="#ffffff", size=11, family="Courier New"),
-                annotation_bgcolor=active_color
-            )
 
             lookback = min(len(close_series), 60)
             r2 = float(high_series.iloc[-lookback:].quantile(0.92))
@@ -227,78 +198,58 @@ else:
             s1 = float(low_series.iloc[-lookback:].quantile(0.22))
             s2 = float(low_series.iloc[-lookback:].quantile(0.08))
 
+            df_tv = pd.DataFrame({
+                'time': close_series.index.astype(np.int64) // 10**9,
+                'open': open_series.values,
+                'high': high_series.values,
+                'low': low_series.values,
+                'close': close_series.values
+            })
+
+            chart_options = {
+                "width": 900,
+                "height": 620,
+                "layout": {
+                    "background": {"type": "solid", "color": "#131722"},
+                    "textColor": "#d1d4dc",
+                },
+                "grid": {
+                    "vertLines": {"color": "#2a2e39"},
+                    "horzLines": {"color": "#2a2e39"},
+                },
+                "rightPriceScale": {
+                    "borderColor": "#2a2e39",
+                },
+                "timeScale": {
+                    "borderColor": "#2a2e39",
+                    "timeVisible": True,
+                    "secondsVisible": False
+                },
+            }
+
+            series_list = [
+                {
+                    "type": "Candlestick",
+                    "data": df_tv.to_dict(orient="records"),
+                    "options": {
+                        "upColor": cbull,
+                        "downColor": cbear,
+                        "borderUpColor": cbull,
+                        "borderDownColor": cbear,
+                        "wickUpColor": cbull,
+                        "wickDownColor": cbear,
+                    }
+                }
+            ]
+
             if s_sr:
-                fig.add_hline(y=r2, line_dash="dash", line_color=cres, line_width=1, annotation_text="R2")
-                fig.add_hline(y=r1, line_dash="solid", line_color=cres, line_width=0.8, annotation_text="R1")
-                fig.add_hline(y=pivot, line_dash="dot", line_color="rgba(255, 153, 0, 0.4)", line_width=1)
-                fig.add_hline(y=s1, line_dash="solid", line_color=csup, line_width=0.8, annotation_text="S1")
-                fig.add_hline(y=s2, line_dash="dash", line_color=csup, line_width=1, annotation_text="S2")
-
-            if s_tl:
-                window = 10
-                high_peaks = high_series[(high_series == high_series.rolling(window=window, center=True).max())].dropna()
-                low_troughs = low_series[(low_series == low_series.rolling(window=window, center=True).min())].dropna()
-                breakout_buys = []
-                breakout_sells = []
-
-                if len(high_peaks) >= 2:
-                    p1_idx, p2_idx = high_peaks.index[-2], high_peaks.index[-1]
-                    x_vals = np.arange(len(close_series))
-                    idx_map = {date: i for i, date in enumerate(close_series.index)}
-                    x1, x2 = idx_map[p1_idx], idx_map[p2_idx]
-                    m = (high_peaks.iloc[-1] - high_peaks.iloc[-2]) / (x2 - x1)
-                    c = high_peaks.iloc[-2] - m * x1
-                    res_trend = m * x_vals + c
-                    fig.add_trace(go.Scatter(x=close_series.index[max(x1, 0):], y=res_trend[max(x1, 0):], line=dict(color=cres, width=1.2, dash="dash"), name="Trend Resistance"))
-                    
-                    for i in range(x2 + 1, len(close_series)):
-                        if close_series.iloc[i] > res_trend[i] and close_series.iloc[i-1] <= res_trend[i-1]:
-                            breakout_buys.append(close_series.index[i])
-
-                if len(low_troughs) >= 2:
-                    t1_idx, t2_idx = low_troughs.index[-2], low_troughs.index[-1]
-                    idx_map = {date: i for i, date in enumerate(close_series.index)}
-                    x_vals = np.arange(len(close_series))
-                    x1, x2 = idx_map[t1_idx], idx_map[t2_idx]
-                    m = (low_troughs.iloc[-1] - low_troughs.iloc[-2]) / (x2 - x1)
-                    c = low_troughs.iloc[-2] - m * x1
-                    sup_trend = m * x_vals + c
-                    fig.add_trace(go.Scatter(x=close_series.index[max(x1, 0):], y=sup_trend[max(x1, 0):], line=dict(color=csup, width=1.2, dash="dash"), name="Trend Support"))
-
-                    for i in range(x2 + 1, len(close_series)):
-                        if close_series.iloc[i] < sup_trend[i] and close_series.iloc[i-1] >= sup_trend[i-1]:
-                            breakout_sells.append(close_series.index[i])
-
-                if breakout_buys:
-                    fig.add_trace(go.Scatter(x=breakout_buys, y=high_series.loc[breakout_buys] * 1.002, mode="markers", marker=dict(symbol="triangle-down", size=12, color=cbull), showlegend=False))
-                if breakout_sells:
-                    fig.add_trace(go.Scatter(x=breakout_sells, y=low_series.loc[breakout_sells] * 0.998, mode="markers", marker=dict(symbol="triangle-up", size=12, color=cbear), showlegend=False))
-
-            if s_ob:
-                bullish_obs = []
-                bearish_obs = []
-                for i in range(len(close_series) - 3, max(1, len(close_series) - 50), -1):
-                    if close_series.iloc[i] > open_series.iloc[i] and (close_series.iloc[i] - open_series.iloc[i]) > (high_series.iloc[i] - low_series.iloc[i]) * 0.5:
-                        if close_series.iloc[i-1] < open_series.iloc[i-1]:
-                            ob_l, ob_h = low_series.iloc[i-1], high_series.iloc[i-1]
-                            if not (low_series.iloc[i:] < ob_l).any():
-                                bullish_obs.append((close_series.index[i-1], ob_l, ob_h))
-                                if len(bullish_obs) >= 2: break
-
-                for ob in bullish_obs:
-                    fig.add_shape(type="rect", x0=ob[0], y0=ob[1], x1=close_series.index[-1], y1=ob[2], fillcolor=hex_to_rgba(cob_bull, 0.08), line=dict(color=cob_bull, width=1))
-
-            time_delta = close_series.index[-1] - close_series.index[-2] if len(close_series) > 1 else pd.Timedelta(minutes=1)
-            future_padding_end = close_series.index[-1] + (time_delta * 8) # Adds 8 bars worth of blank timeline space to the right
-            start_visible_view = close_series.index[-min(len(close_series), 45)]
-
-            fig.update_layout(
-                template="plotly_dark", paper_bgcolor="#131722", plot_bgcolor="#131722",
-                xaxis_rangeslider_visible=False, height=620, margin=dict(l=10, r=10, t=10, b=10),
-                uirevision=tk,
-                xaxis=dict(gridcolor="#2a2e39", linecolor="#2a2e39", range=[start_visible_view, future_padding_end]),
-                yaxis=dict(gridcolor="#2a2e39", linecolor="#2a2e39", side="right")
-            )
+                series_list["options"]["priceLines"] = [
+                    {"price": r2, "color": cres, "lineStyle": 1, "axisLabelVisible": True, "title": "R2"},
+                    {"price": r1, "color": cres, "lineStyle": 0, "axisLabelVisible": True, "title": "R1"},
+                    {"price": pivot, "color": "rgba(255, 153, 0, 0.4)", "lineStyle": 2, "axisLabelVisible": True, "title": "Pivot"},
+                    {"price": s1, "color": csup, "lineStyle": 0, "axisLabelVisible": True, "title": "S1"},
+                    {"price": s2, "color": csup, "lineStyle": 1, "axisLabelVisible": True, "title": "S2"},
+                ]
 
             delta = close_series.diff()
             gain = (delta.where(delta > 0, 0)).ewm(span=14, adjust=False).mean()
@@ -307,7 +258,7 @@ else:
             current_rsi = float(rsi.iloc[-1])
 
             with chart_placeholder.container():
-                st.plotly_chart(fig, use_container_width=True, key="tv_custom_canvas", config={'editable': True, 'displaylogo': False, 'scrollZoom': True})
+                renderLightweightCharts(charts=[{"otions": chart_options, "series": series_list}], key="tv_lightweight_canvas")
 
             with panel_placeholder.container():
                 st.markdown(f"""
