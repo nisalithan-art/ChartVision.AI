@@ -14,6 +14,7 @@ st.set_page_config(
 
 st.markdown("""
     <style>
+    /* Premium TradingView Dark Workspace Theme */
     .stApp {
         background-color: #131722 !important;
         color: #d1d4dc !important;
@@ -32,6 +33,8 @@ st.markdown("""
         border: 1px solid #2a2e39 !important;
         border-radius: 4px !important;
     }
+    
+    /* TradingView Style Right Panel UI Cards */
     .tv-panel {
         background-color: #1c2030;
         border: 1px solid #2a2e39;
@@ -54,12 +57,18 @@ st.markdown("""
         font-weight: bold;
     }
     
-    /* --- PREVENT REFRESH FLICKERING --- */
+    /* 🛑 CRITICAL FIX: PREVENT FRAGMENT FROM FADING/DIMMING/REFRESH FLASHING */
     div[data-fragment-id] {
         opacity: 1 !important;
         filter: none !important;
+        transition: none !important;
+        animation: none !important;
     }
-    [data-testid="stElementLoadingIndicator"], .stSpinner {
+    div[data-fragment-id] > div {
+        opacity: 1 !important;
+    }
+    /* Complete ban on Streamlit default loading triggers */
+    [data-testid="stElementLoadingIndicator"], .stSpinner, [data-testid="stStatusWidget"] {
         display: none !important;
         visibility: hidden !important;
     }
@@ -85,7 +94,7 @@ def hex_to_rgba(hex_str, opacity=0.1):
         rgb = tuple(int(hex_str[i:i + 2], 16) for i in range(0, 6, 2))
     else:
         rgb = (38, 166, 154)
-    return f"rgba({rgb[0]}, {rgb[1]}, {rgb[2]}, {opacity})"
+    return f"rgba({rgb}, {rgb}, {rgb}, {opacity})"
 
 
 if 'logged_in' not in st.session_state:
@@ -147,28 +156,13 @@ else:
 
     st.sidebar.markdown("---")
     live_mode = st.sidebar.toggle("🔴 Live Streaming Updates", value=True)
-    
     refresh_rate = 2 if live_mode else None
 
-    chart_col, side_panel_col = st.columns([3.8, 1.2])
-
-    with chart_col:
-        st.markdown(f"<h2 style='margin:0; font-weight:600; color:#ffffff;'>📊 {ticker} Live Terminal Space</h2>", unsafe_allow_html=True)
-        if live_mode:
-            st.caption("⚡ Turbo Live Stream Engine Active (2s updates). Turn off to freeze custom drawing state.")
-        else:
-            st.caption("🎨 Interactive Mode: Grab edges to extend custom geometric structures manually.")
-            
-        chart_placeholder = st.empty()
-
-    with side_panel_col:
-        st.markdown("<h3 style='margin:0; font-weight:600; color:#ffffff;'>Watchlist & Stats</h3>", unsafe_allow_html=True)
-        panel_placeholder = st.empty()
-
     @st.fragment(run_every=refresh_rate)
-    def update_terminal_matrix(tk, tf, pr, s_sr, s_tl, s_ob, s_fvg, cbull, cbear, cres, csup, cob_bull, cob_bear):
+    def render_isolated_terminal(tk, tf, pr, s_sr, s_tl, s_ob, s_fvg, cbull, cbear, cres, csup, cob_bull, cob_bear):
         if not tk.strip():
             return
+        chart_col, side_panel_col = st.columns([3.8, 1.2])
 
         try:
             data = yf.download(tk.strip(), period=pr, interval=tf, progress=False)
@@ -196,7 +190,6 @@ else:
                 return
 
             fig = go.Figure()
-            
             fig.add_trace(go.Candlestick(
                 x=close_series.index, open=open_series, high=high_series, low=low_series, close=close_series,
                 name=tk, increasing_line_color=cbull, decreasing_line_color=cbear,
@@ -210,12 +203,8 @@ else:
 
             active_color = cbull if current_price >= open_series.iloc[-1] else cbear
             fig.add_hline(
-                y=current_price, 
-                line_color=active_color, 
-                line_width=1.2, 
-                line_dash="dash",
-                annotation_text=f" {current_price:,.2f} ",
-                annotation_position="right",
+                y=current_price, line_color=active_color, line_width=1.2, line_dash="dash",
+                annotation_text=f" {current_price:,.2f} ", annotation_position="right",
                 annotation_font=dict(color="#ffffff", size=11, family="Courier New"),
                 annotation_bgcolor=active_color
             )
@@ -276,7 +265,6 @@ else:
 
             if s_ob:
                 bullish_obs = []
-                bearish_obs = []
                 for i in range(len(close_series) - 3, max(1, len(close_series) - 50), -1):
                     if close_series.iloc[i] > open_series.iloc[i] and (close_series.iloc[i] - open_series.iloc[i]) > (high_series.iloc[i] - low_series.iloc[i]) * 0.5:
                         if close_series.iloc[i-1] < open_series.iloc[i-1]:
@@ -284,9 +272,8 @@ else:
                             if not (low_series.iloc[i:] < ob_l).any():
                                 bullish_obs.append((close_series.index[i-1], ob_l, ob_h))
                                 if len(bullish_obs) >= 2: break
-
                 for ob in bullish_obs:
-                    fig.add_shape(type="rect", x0=ob[0], y0=ob[1], x1=close_series.index[-1], y1=ob[2], fillcolor=hex_to_rgba(cob_bull, 0.08), line=dict(color=cob_bull, width=1))
+                    fig.add_shape(type="rect", x0=ob, y0=ob, x1=close_series.index[-1], y1=ob, fillcolor=hex_to_rgba(cob_bull, 0.08), line=dict(color=cob_bull, width=1))
 
             time_delta = close_series.index[-1] - close_series.index[-2] if len(close_series) > 1 else pd.Timedelta(minutes=1)
             future_padding_end = close_series.index[-1] + (time_delta * 8)
@@ -306,10 +293,12 @@ else:
             rsi = 100 - (100 / (1 + (gain / (loss + 1e-10))))
             current_rsi = float(rsi.iloc[-1])
 
-            with chart_placeholder.container():
-                st.plotly_chart(fig, use_container_width=True, key="tv_custom_canvas", config={'editable': True, 'displaylogo': False, 'scrollZoom': True})
+            with chart_col:
+                st.markdown(f"<h2 style='margin:0; font-weight:600; color:#ffffff;'>📊 {tk} Live Canvas</h2>", unsafe_allow_html=True)
+                st.plotly_chart(fig, use_container_width=True, key="tv_canvas_core", config={'editable': True, 'displaylogo': False, 'scrollZoom': True})
 
-            with panel_placeholder.container():
+            with side_panel_col:
+                st.markdown("<h3 style='margin:0; font-weight:600; color:#ffffff;'>Watchlist & Stats</h3>", unsafe_allow_html=True)
                 st.markdown(f"""
                 <div class="tv-panel">
                     <div style="font-size:16px; font-weight:bold; margin-bottom:10px; color:#ffffff;">{tk} Live Feed</div>
@@ -328,9 +317,9 @@ else:
                 """, unsafe_allow_html=True)
                 
         except Exception as e:
-            pass
+            st.error(f"Error drawing canvas element: {e}")
 
-    update_terminal_matrix(ticker, timeframe, period, show_sr, show_trendlines, show_ob, show_fvg, c_bull, c_bear, c_res, c_sup, c_ob_bull, c_ob_bear)
+    render_isolated_terminal(ticker, timeframe, period, show_sr, show_trendlines, show_ob, show_fvg, c_bull, c_bear, c_res, c_sup, c_ob_bull, c_ob_bear)
 
     st.markdown("<br>", unsafe_allow_html=True)
     with st.expander("💬 Submit Developer Bug Report / Feature Request Desk"):
