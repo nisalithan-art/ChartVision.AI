@@ -1,42 +1,63 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
-import json
 from supabase import create_client, Client
+import plotly.graph_objects as go
+import numpy as np
 
 st.set_page_config(
-    page_title="ChartVision.AI Premium Pro Terminal", 
+    page_title="ChartVision.AI", 
     page_icon="📊", 
     layout="wide", 
     initial_sidebar_state="expanded"
 )
-
 st.markdown("""
     <style>
     .stApp {
-        background-color: #131722 !important;
-        color: #d1d4dc !important;
+        background-color: #0B0E14 !important;
+        color: #E0E6ED !important;
     }
     [data-testid="stSidebar"] {
-        background-color: #1c2030 !important;
-        border-right: 1px solid #2a2e39 !important;
+        background-color: #11151D !important;
     }
     label, .stWidgetLabel p {
-        color: #848e9c !important;
+        color: #FFFFFF !important;
         font-weight: 500 !important;
-        font-size: 13px !important;
     }
-    div[data-baseweb="input"], div[data-baseweb="select"] {
-        background-color: #1e222d !important;
-        border: 1px solid #2a2e39 !important;
-        border-radius: 4px !important;
+    div[data-baseweb="input"], div[data-baseweb="select"], div[data-baseweb="textarea"] {
+        background-color: #1A1F2C !important;
+        border: 1px solid #2D3748 !important;
     }
-    .block-container {
-        padding-top: 1.5rem !important;
-        padding-bottom: 0rem !important;
+    input, textarea, select {
+        color: #FFFFFF !important;
+        -webkit-text-fill-color: #FFFFFF !important;
+    }
+    .analysis-card {
+        background-color: #11151D;
+        border: 1px solid #1A1F2C;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 15px;
+    }
+    div[data-testid="stMetric"] {
+        background-color: #11151D !important;
+        border: 1px solid #1A1F2C !important;
+        padding: 15px !important;
+        border-radius: 8px !important;
+    }
+    
+    /* --- STOP STREAMLIT REFRESH FLASHING --- */
+    div[data-fragment-id] {
+        opacity: 1 !important;
+        filter: none !important;
+    }
+    [data-testid="stElementLoadingIndicator"], .stSpinner {
+        display: none !important;
+        visibility: hidden !important;
     }
     </style>
 """, unsafe_allow_html=True)
+
 
 def init_supabase() -> Client:
     url = st.secrets["SUPABASE_URL"]
@@ -54,9 +75,13 @@ if 'logged_in' not in st.session_state:
 if 'user_email' not in st.session_state:
     st.session_state.user_email = ""
 
+
 if not st.session_state.logged_in:
     st.title("🔒 ChartVision.AI - Secure Login")
+    st.write("### Please Login or Sign Up to access the Pro Trading Tool")
+
     tab1, tab2 = st.tabs(["🔑 Login", "📝 Sign Up"])
+
     with tab1:
         login_email = st.text_input("Email Address", key="login_email_input")
         login_password = st.text_input("Password", type="password", key="login_pw_input")
@@ -68,137 +93,222 @@ if not st.session_state.logged_in:
                 st.rerun()
             except Exception as e:
                 st.error(f"Login Failed: {e}")
+
     with tab2:
         signup_email = st.text_input("Enter Your Email Address", key="signup_email_input")
         signup_password = st.text_input("Enter Password", type="password", key="signup_pw_input")
         if st.button("Create Account", use_container_width=True):
             try:
                 response = supabase.auth.sign_up({"email": signup_email, "password": signup_password})
-                st.success("Sign Up Successful!")
+                st.success("Sign Up Successful! Go to Login tab.")
             except Exception as e:
                 st.error(f"Sign Up Failed: {e}")
+
 else:
-    st.sidebar.markdown(f"🟢 **Premium Active**<br><small style='color:#787b86;'>{st.session_state.user_email}</small>", unsafe_allow_html=True)
-    if st.sidebar.button("Sign Out Terminal", type="secondary", use_container_width=True):
+    st.sidebar.write(f"👤 Logged in as: {st.session_state.user_email}")
+    if st.sidebar.button("Log Out", type="primary", use_container_width=True):
         st.session_state.logged_in = False
         st.session_state.user_email = ""
         st.rerun()
 
     st.sidebar.markdown("---")
-    ticker = st.sidebar.text_input("Symbol:", value="BTC-USD")
-    timeframe = st.sidebar.selectbox("Interval:", options=["1m", "5m", "15m", "30m", "1h", "1d"], index=4) 
-    period = st.sidebar.selectbox("Range:", options=["1d", "5d", "1mo", "3mo", "1y", "max"], index=2)
+    
+    ticker = st.sidebar.text_input("Enter Ticker:", value="BTC-USD", key="ticker_input_field")
+    timeframe = st.sidebar.selectbox("Select Timeframe:", options=["1m", "5m", "15m", "30m", "1h", "1d"], index=3, key="tf_select_field") 
+    period = st.sidebar.selectbox("Select Period:", options=["1d", "5d", "1mo", "3mo", "1y", "max"], index=2, key="pr_select_field")
     
     st.sidebar.markdown("---")
-    st.sidebar.write("### 🛠️ Proprietary Core Algorithmic Indicators")
-    show_sr = st.sidebar.toggle("🎯 Auto-Snap S&R Lines", value=True)
-    show_ob = st.sidebar.toggle("🛡️ Smart Money Order Blocks", value=True)
+    st.sidebar.write("### 🛠️ Smart Money & Chart Tools")
+    show_sr = st.sidebar.toggle("🎯 Auto-Snap S&R Lines", value=False)
+    show_trendlines = st.sidebar.toggle("📈 Auto-Trendlines & Breakouts", value=False)
+    show_ob = st.sidebar.toggle("🛡️ Unmitigated Order Blocks (OB)", value=False)
+    show_fvg = st.sidebar.toggle("🕳️ Unfilled Fair Value Gaps (FVG)", value=False)
     
     st.sidebar.markdown("---")
-    with st.sidebar.expander("🎨 Custom Chart Styling Panel", expanded=False):
-        c_bull = st.color_picker("Bullish Candle", value="#26a69a")
-        c_bear = st.color_picker("Bearish Candle", value="#ef5350")
-        c_res = st.color_picker("Resistance Vectors", value="#ef5350")
-        c_sup = st.color_picker("Support Vectors", value="#26a69a")
+    live_mode = st.sidebar.toggle("🔴 Live Market Update (Auto-Refresh)", value=True)
+    refresh_rate = 10 if live_mode else None
 
-    try:
-        data = yf.download(ticker.strip(), period=period, interval=timeframe, progress=False)
-        
-        if data is not None and not data.empty:
-            if isinstance(data.columns, pd.MultiIndex):
-                data.columns = data.columns.get_level_values(0)
+    st.title("📊 ChartVision.AI - Smart Money Concepts Dashboard")
+    st.write("### Toggle advanced institutional metrics and automated trend breakout markers from the sidebar.")
 
-            df_clean = pd.DataFrame({
-                'open': data['Open'],
-                'high': data['High'],
-                'low': data['Low'],
-                'close': data['Close']
-            }).dropna()
+    live_ui_placeholder = st.empty()
 
-            df_clean['time'] = df_clean.index.astype('int64') // 10**9
-            chart_records = df_clean[['time', 'open', 'high', 'low', 'close']].to_dict(orient='records')
-            js_candles = json.dumps(chart_records)
+    @st.fragment(run_every=refresh_rate)
+    def render_smart_dashboard(tk, tf, pr, s_sr, s_tl, s_ob, s_fvg):
+        if not tk.strip():
+            return
 
-            sr_data = {"res": 0.0, "sup": 0.0, "show": False}
-            if show_sr and len(df_clean) > 20:
-                sr_data["res"] = float(df_clean['high'].tail(50).max())
-                sr_data["sup"] = float(df_clean['low'].tail(50).min())
-                sr_data["show"] = True
+        try:
+            data = yf.download(tk.strip(), period=pr, interval=tf, progress=False)
+            if data.empty:
+                return
 
-            ob_data = {"top": 0.0, "bottom": 0.0, "show": False}
-            if show_ob and len(df_clean) > 30:
-                for i in range(len(df_clean) - 3, len(df_clean) - 30, -1):
-                    if df_clean['close'].iloc[i] < df_clean['open'].iloc[i]:
-                        if df_clean['close'].iloc[i+1] > df_clean['open'].iloc[i+1]:
-                            ob_data["top"] = float(df_clean['high'].iloc[i])
-                            ob_data["bottom"] = float(df_clean['low'].iloc[i])
-                            ob_data["show"] = True
-                            break
+            def extract_ticker_series(df, col_name):
+                if col_name in df.columns:
+                    series_data = df[col_name]
+                    return series_data.iloc[:, 0] if isinstance(series_data, pd.DataFrame) else series_data
+                if isinstance(df.columns, pd.MultiIndex):
+                    for col in df.columns:
+                        if col_name in col:
+                            series_data = df[col]
+                            return series_data.iloc[:, 0] if isinstance(series_data, pd.DataFrame) else series_data
+                return pd.Series(dtype=float)
 
-            st.markdown(f"<h2 style='margin:0 0 10px 0; font-weight:600; color:#ffffff;'>📊 {ticker} Custom In-House Terminal</h2>", unsafe_allow_html=True)
+            close_series = extract_ticker_series(data, 'Close').dropna()
+            high_series = extract_ticker_series(data, 'High').dropna()
+            low_series = extract_ticker_series(data, 'Low').dropna()
+            open_series = extract_ticker_series(data, 'Open').dropna()
 
-            custom_terminal_html = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="utf-8">
-                <style>
-                    html, body {{ margin: 0; padding: 0; width: 100%; height: 100%; background-color: #131722; overflow: hidden; }}
-                    #custom_canvas {{ width: 100%; height: 680px; background-color: #131722; }}
-                </style>
-                <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
-            </head>
-            <body>
-                <div id="custom_canvas"></div>
-                <script>
-                    const container = document.getElementById('custom_canvas');
-                    const chart = LightweightCharts.createChart(container, {{
-                        width: container.clientWidth,
-                        height: 680,
-                        layout: {{
-                            background: {{ type: 'solid', color: '#131722' }},
-                            textColor: '#d1d4dc',
-                            fontSize: 12
-                        }},
-                        grid: {{
-                            vertLines: {{ color: '#1f222e' }},
-                            horzLines: {{ color: '#1f222e' }}
-                        }},
-                        crosshair: {{ mode: LightweightCharts.CrosshairMode.Normal }},
-                        priceScale: {{ borderColor: '#2a2e39' }},
-                        timeScale: {{ borderColor: '#2a2e39', timeVisible: true }}
-                    }});
+            if len(close_series) < 20:
+                return
 
-                    const candleSeries = chart.addCandlestickSeries({{
-                        upColor: '{c_bull}', downColor: '{c_bear}',
-                        borderUpColor: '{c_bull}', borderDownColor: '{c_bear}',
-                        wickUpColor: '{c_bull}', wickDownColor: '{c_bear}'
-                    }});
+            fig = go.Figure()
+            fig.add_trace(go.Candlestick(
+                x=close_series.index, open=open_series, high=high_series, low=low_series, close=close_series, name=tk
+            ))
 
-                    const data = {js_candles};
-                    candleSeries.setData(data);
+            lookback = min(len(close_series), 60)
+            r2 = float(high_series.iloc[-lookback:].quantile(0.92))
+            r1 = float(high_series.iloc[-lookback:].quantile(0.78))
+            pivot = float(close_series.iloc[-lookback:].quantile(0.50))
+            s1 = float(low_series.iloc[-lookback:].quantile(0.22))
+            s2 = float(low_series.iloc[-lookback:].quantile(0.08))
 
-                    const srInfo = {json.dumps(sr_data)};
-                    if (srInfo.show) {{
-                        candleSeries.createPriceLine({{ price: srInfo.res, color: '{c_res}', lineWidth: 2, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: 'Resistance' }});
-                        candleSeries.createPriceLine({{ price: srInfo.sup, color: '{c_sup}', lineWidth: 2, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: 'Support' }});
-                    }}
+            if s_sr:
+                fig.add_hline(y=r2, line_dash="dash", line_color="#00FF66", line_width=1.5, annotation_text=" R2 (Major Resistance)")
+                fig.add_hline(y=r1, line_dash="solid", line_color="#00CC52", line_width=1, annotation_text=" R1 (Minor Resistance)")
+                fig.add_hline(y=pivot, line_dash="dot", line_color="#FF9900", line_width=1, annotation_text=" PP (Pivot)")
+                fig.add_hline(y=s1, line_dash="solid", line_color="#FF3333", line_width=1, annotation_text=" S1 (Minor Support)")
+                fig.add_hline(y=s2, line_dash="dash", line_color="#CC0000", line_width=1.5, annotation_text=" S2 (Major Support Floor)")
 
-                    const obInfo = {json.dumps(ob_data)};
-                    if (obInfo.show) {{
-                        candleSeries.createPriceLine({{ price: obInfo.top, color: '#00ffcc', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Solid, axisLabelVisible: true, title: 'OB Top' }});
-                        candleSeries.createPriceLine({{ price: obInfo.bottom, color: '#00ffcc', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Solid, axisLabelVisible: true, title: 'OB Bottom' }});
-                    }}
+            if s_tl:
+                window = 10
+                high_peaks = high_series[(high_series == high_series.rolling(window=window, center=True).max())].dropna()
+                low_troughs = low_series[(low_series == low_series.rolling(window=window, center=True).min())].dropna()
 
-                    window.addEventListener('resize', () => {{
-                        chart.resize(container.clientWidth, 680);
-                    }});
-                </script>
-            </body>
-            </html>
-            """
-            import streamlit.components.v1 as components
-            components.html(custom_terminal_html, height=690, scrolling=False)
+                breakout_buys = []
+                breakout_sells = []
 
-    except Exception as e:
-        st.error(f"Data Core Connection Failure: {e}")
+                if len(high_peaks) >= 2:
+                    p1_idx, p2_idx = high_peaks.index[-2], high_peaks.index[-1]
+                    p1_val, p2_val = high_peaks.iloc[-2], high_peaks.iloc[-1]
+                    
+                    # Formulate trendline line formula: y = mx + c
+                    x_vals = np.arange(len(close_series))
+                    idx_map = {date: i for i, date in enumerate(close_series.index)}
+                    
+                    x1, x2 = idx_map[p1_idx], idx_map[p2_idx]
+                    m = (p2_val - p1_val) / (x2 - x1)
+                    c = p1_val - m * x1
+                    
+                    res_trend = m * x_vals + c
+                    
+                    fig.add_trace(go.Scatter(x=close_series.index[max(x1, 0):], y=res_trend[max(x1, 0):], line=dict(color="#FF00CC", width=1.5, dash="dash"), name="Resistance Trend"))
+
+                    for i in range(x2 + 1, len(close_series)):
+                        if close_series.iloc[i] > res_trend[i] and close_series.iloc[i-1] <= res_trend[i-1]:
+                            breakout_buys.append(close_series.index[i])
+
+                if len(low_troughs) >= 2:
+                    t1_idx, t2_idx = low_troughs.index[-2], low_troughs.index[-1]
+                    t1_val, t2_val = low_troughs.iloc[-2], low_troughs.iloc[-1]
+                    
+                    idx_map = {date: i for i, date in enumerate(close_series.index)}
+                    x_vals = np.arange(len(close_series))
+                    
+                    x1, x2 = idx_map[t1_idx], idx_map[t2_idx]
+                    m = (t2_val - t1_val) / (x2 - x1)
+                    c = t1_val - m * x1
+                    
+                    sup_trend = m * x_vals + c
+                    
+                    fig.add_trace(go.Scatter(x=close_series.index[max(x1, 0):], y=sup_trend[max(x1, 0):], line=dict(color="#00FFFF", width=1.5, dash="dash"), name="Support Trend"))
+
+                    for i in range(x2 + 1, len(close_series)):
+                        if close_series.iloc[i] < sup_trend[i] and close_series.iloc[i-1] >= sup_trend[i-1]:
+                            breakout_sells.append(close_series.index[i])
+
+                if breakout_buys:
+                    fig.add_trace(go.Scatter(x=breakout_buys, y=high_series.loc[breakout_buys] * 1.002, mode="markers", marker=dict(symbol="triangle-down", size=14, color="#00FF66"), name="Bullish Breakout"))
+                if breakout_sells:
+                    fig.add_trace(go.Scatter(x=breakout_sells, y=low_series.loc[breakout_sells] * 0.998, mode="markers", marker=dict(symbol="triangle-up", size=14, color="#FF3333"), name="Bearish Breakdown"))
+
+            if s_ob:
+                bullish_obs = []
+                bearish_obs = []
+
+                for i in range(len(close_series) - 3, max(1, len(close_series) - 50), -1):
+                    if close_series.iloc[i] > open_series.iloc[i] and (close_series.iloc[i] - open_series.iloc[i]) > (high_series.iloc[i] - low_series.iloc[i]) * 0.5:
+                        if close_series.iloc[i-1] < open_series.iloc[i-1]:
+                            ob_low = low_series.iloc[i-1]
+                            ob_high = high_series.iloc[i-1]
+
+                            subsequent_lows = low_series.iloc[i:]
+                            if not (subsequent_lows < ob_low).any():
+                                bullish_obs.append((close_series.index[i-1], ob_low, ob_high))
+                                if len(bullish_obs) >= 3: break # Limit to top 3 latest fresh zones
+
+                for i in range(len(close_series) - 3, max(1, len(close_series) - 50), -1):
+                    if close_series.iloc[i] < open_series.iloc[i] and (open_series.iloc[i] - close_series.iloc[i]) > (high_series.iloc[i] - low_series.iloc[i]) * 0.5:
+                        if close_series.iloc[i-1] > open_series.iloc[i-1]:
+                            ob_low = low_series.iloc[i-1]
+                            ob_high = high_series.iloc[i-1]
+
+                            subsequent_highs = high_series.iloc[i:]
+                            if not (subsequent_highs > ob_high).any():
+                                bearish_obs.append((close_series.index[i-1], ob_low, ob_high))
+                                if len(bearish_obs) >= 3: break
+
+                for ob in bullish_obs:
+                    fig.add_shape(type="rect", x0=ob[0], y0=ob[1], x1=close_series.index[-1], y1=ob[2], fillcolor="rgba(0, 255, 102, 0.08)", line=dict(color="rgba(0, 255, 102, 0.3)", width=1))
+                for ob in bearish_obs:
+                    fig.add_shape(type="rect", x0=ob[0], y0=ob[1], x1=close_series.index[-1], y1=ob[2], fillcolor="rgba(255, 51, 51, 0.08)", line=dict(color="rgba(255, 51, 51, 0.3)", width=1))
+
+            if s_fvg:
+                for i in range(len(close_series) - 3):
+                    if high_series.iloc[i] < low_series.iloc[i+2] and close_series.iloc[i+1] > open_series.iloc[i+1]:
+                        gap_bottom = high_series.iloc[i]
+                        gap_top = low_series.iloc[i+2]
+
+                        future_lows = low_series.iloc[i+2:]
+                        if not (future_lows <= gap_bottom).any():
+                            fig.add_shape(type="rect", x0=close_series.index[i+1], y0=gap_bottom, x1=close_series.index[-1], y1=gap_top, fillcolor="rgba(0, 255, 204, 0.05)", line=dict(width=0))
+
+                    if low_series.iloc[i] > high_series.iloc[i+2] and close_series.iloc[i+1] < open_series.iloc[i+1]:
+                        gap_top = low_series.iloc[i]
+                        gap_bottom = high_series.iloc[i+2]
+
+                        future_highs = high_series.iloc[i+2:]
+                        if not (future_highs >= gap_top).any():
+                            fig.add_shape(type="rect", x0=close_series.index[i+1], y0=gap_bottom, x1=close_series.index[-1], y1=gap_top, fillcolor="rgba(255, 153, 0, 0.05)", line=dict(width=0))
+
+            fig.update_layout(
+                template="plotly_dark", paper_bgcolor="#0B0E14", plot_bgcolor="#0B0E14",
+                xaxis_rangeslider_visible=False, height=650, margin=dict(l=20, r=20, t=20, b=20),
+                uirevision=tk
+            )
+
+            current_price = float(close_series.iloc[-1])
+            prev_price = float(close_series.iloc[-2])
+            price_change = ((current_price - prev_price) / prev_price) * 100
+
+            with live_ui_placeholder.container():
+                st.plotly_chart(fig, use_container_width=True, key="smc_dashboard_chart_canvas", config={'displaylogo': False, 'scrollZoom': True})
+
+                st.markdown("---")
+                st.write("## 🏛️ Smart Money Technical Matrix Data")
+                
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric(label=f"Live {tk} Price", value=f"{current_price:,.2f}", delta=f"{price_change:+.2f}%")
+                with col2:
+                    st.metric(label="Structural Pivot Target", value=f"{pivot:,.2f}")
+                with col3:
+                    st.metric(label="Institutional Resistance (R1)", value=f"{r1:,.2f}")
+                with col4:
+                    st.metric(label="Institutional Support (S1)", value=f"{s1:,.2f}")
+                
+        except Exception as e:
+            pass
+
+    render_smart_dashboard(ticker, timeframe, period, show_sr, show_trendlines, show_ob, show_fvg)
