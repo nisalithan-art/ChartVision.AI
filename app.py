@@ -62,8 +62,8 @@ try:
             high=data['High'],
             low=data['Low'],
             close=data['Close'],
-            increasing_line_color='#00ff66',  
-            decreasing_line_color='#ff3366',  
+            increasing_line_color='#00ff66',
+            decreasing_line_color='#ff3366',
             name="Candlesticks"
         )])
 
@@ -81,8 +81,39 @@ try:
                 line=dict(color="#00ff66", width=1.5, dash="dash"),
             )
 
+        highest_high = float(high_prices.max())
+        lowest_low = float(low_prices.min())
+        price_range = highest_high - lowest_low
+
+        fib_levels = {
+            '0.0%': highest_high,
+            '23.6%': highest_high - (price_range * 0.236),
+            '38.2%': highest_high - (price_range * 0.382),
+            '50.0%': highest_high - (price_range * 0.500),
+            '61.8%': highest_high - (price_range * 0.618),
+            '78.6%': highest_high - (price_range * 0.786),
+            '100.0%': lowest_low
+        }
+
+        for level, price in fib_levels.items():
+            fig.add_shape(
+                type="line",
+                x0=data.index[0], y0=price,
+                x1=data.index[-1], y1=price,
+                line=dict(color="rgba(255, 165, 0, 0.5)", width=1.5, dash="dot"),
+            )
+            fig.add_annotation(
+                x=data.index[-1], y=price,
+                text=f"Fib {level} ({price:.2f})",
+                showarrow=False,
+                xanchor="right",
+                yanchor="bottom",
+                font=dict(color="#ffcc00", size=10),
+                bgcolor="rgba(11, 14, 20, 0.7)"
+            )
+
         fig.update_layout(
-            title=f"{ticker} Live Chart with Auto S&R",
+            title=f"{ticker} Live Chart with Auto S&R & Fibonacci Levels",
             yaxis_title="Price",
             xaxis_title="Date/Time",
             template="plotly_dark",
