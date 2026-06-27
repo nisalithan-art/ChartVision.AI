@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
-from supabase import create_client, Client
+from supabase import create_client, 
 import plotly.graph_objects as go
 import numpy as np
 
