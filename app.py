@@ -310,5 +310,6 @@ else:
                 
         except Exception as e:
             pass
+            
 
     render_smart_dashboard(ticker, timeframe, period, show_sr, show_trendlines, show_ob, show_fvg)
