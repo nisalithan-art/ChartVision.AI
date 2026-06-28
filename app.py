@@ -48,51 +48,52 @@ try:
         st.sidebar.subheader("🎯 Custom Fibonacci Zone")
         
         max_idx = len(data) - 1
-        start_idx = st.sidebar.slider("Fibonacci Start Point", 0, max_idx, 0)
-        end_idx = st.sidebar.slider("Fibonacci End Point", 0, max_idx, max_idx)
+        start_idx = st.sidebar.slider("Fibonacci Start Point", 0, max_idx, int(max_idx * 0.2))
+        end_idx = st.sidebar.slider("Fibonacci End Point", 0, max_idx, int(max_idx * 0.8))
         
-        # Checkbox to toggle Circles
         show_circles = st.sidebar.checkbox("Show Fibonacci Circles", value=True)
+        show_entries = st.sidebar.checkbox("Show Auto Entry Signals", value=True)
         
         zone_high = float(high_prices[min(start_idx, end_idx):max(start_idx, end_idx)+1].max())
         zone_low = float(low_prices[min(start_idx, end_idx):max(start_idx, end_idx)+1].min())
         zone_range = zone_high - zone_low
         
+        # TradingView Color Theme applied for Candlesticks
         fig = go.Figure(data=[go.Candlestick(
             x=data.index, open=data['Open'], high=data['High'], low=data['Low'], close=data['Close'],
-            increasing_line_color='#00ff66', decreasing_line_color='#ff3366', name="Candlesticks"
+            increasing_fillcolor='#089981', increasing_line_color='#089981',
+            decreasing_fillcolor='#f23645', decreasing_line_color='#f23645',
+            name="Candlesticks"
         )])
         
         # Auto Support & Resistance Lines
         for peak in peaks:
             fig.add_shape(type="line", x0=data.index[0], y0=high_prices[peak], x1=data.index[-1], y1=high_prices[peak],
-                          line=dict(color="#ff3366", width=1.5, dash="dash"))
+                          line=dict(color="rgba(242, 54, 69, 0.4)", width=1.5, dash="dash"))
         for trough in troughs:
             fig.add_shape(type="line", x0=data.index[0], y0=low_prices[trough], x1=data.index[-1], y1=low_prices[trough],
-                          line=dict(color="#00ff66", width=1.5, dash="dash"))
+                          line=dict(color="rgba(8, 153, 129, 0.4)", width=1.5, dash="dash"))
             
-        # Fibonacci Levels
-        fib_ratios = [0.0, 0.236, 0.382, 0.500, 0.618, 0.786, 1.0]
+        # Fibonacci Calculation
+        fib_ratios = [0.236, 0.382, 0.500, 0.618, 0.786, 1.0]
         fib_start_date = data.index[start_idx]
         fib_end_date = data.index[end_idx]
         
-        # Base dimensions for circles (Time delta and Price delta)
         time_delta = fib_end_date - fib_start_date
         center_price = zone_high if start_idx < end_idx else zone_low
+        trend_up = start_idx < end_idx
         
+        # Array to track entries to prevent duplication
+        detected_entries = []
+
         for ratio in fib_ratios:
-            price = zone_high - (zone_range * ratio)
+            price = zone_high - (zone_range * ratio) if trend_up else zone_low + (zone_range * ratio)
             
             # Draw standard Retrement Lines
             fig.add_shape(type="line", x0=min(fib_start_date, fib_end_date), y0=price, x1=max(fib_start_date, fib_end_date), y1=price,
-                          line=dict(color="rgba(255, 165, 0, 0.4)", width=1.5, dash="dot"))
+                          line=dict(color="rgba(255, 165, 0, 0.3)", width=1, dash="dot"))
             
-            fig.add_annotation(x=max(fib_start_date, fib_end_date), y=price, text=f"Fib {ratio*100:.1f}% ({price:.2f})",
-                               showarrow=False, xanchor="left", yanchor="bottom",
-                               font=dict(color="#ffcc00", size=10), bgcolor="rgba(11, 14, 20, 0.7)")
-            
-            # Draw Fibonacci Circles if enabled
-            if show_circles and ratio > 0:
+            if show_circles:
                 current_time_radius = time_delta * ratio
                 current_price_radius = zone_range * ratio
                 
@@ -102,36 +103,64 @@ try:
                     y0=center_price - current_price_radius,
                     x1=fib_start_date + current_time_radius,
                     y1=center_price + current_price_radius,
-                    line=dict(color="rgba(0, 255, 204, 0.35)", width=1.5, dash="dashdot"),
-                    fillcolor="rgba(0, 255, 204, 0.01)"
+                    line=dict(color="rgba(0, 255, 204, 0.25)", width=1.2, dash="dashdot"),
+                    fillcolor="rgba(0, 255, 204, 0.005)"
                 )
+            
+            # --- AUTOMATIC ENTRY ENGINE (MATH BASED) ---
+            if show_entries:
+                for idx in range(max(start_idx, end_idx), len(data)):
+                    current_date = data.index[idx]
+                    
+                    # 1. Calculate time distance from center
+                    t_dist = abs((current_date - fib_start_date).total_seconds())
+                    r_time_seconds = abs((time_delta * ratio).total_seconds())
+                    
+                    # 2. Check if candle is on the Fib Circle time boundary (with 5% tolerance)
+                    if abs(t_dist - r_time_seconds) <= (r_time_seconds * 0.05):
+                        c_low = low_prices[idx]
+                        c_high = high_prices[idx]
+                        
+                        # Buy Entry Condition (Retracement to Golden Ratios in Up-trend)
+                        if trend_up and ratio in [0.5, 0.618, 0.786]:
+                            if c_low <= price <= c_high and current_date not in detected_entries:
+                                fig.add_annotation(
+                                    x=current_date, y=c_low,
+                                    text="🟢 BUY ENTRY", showarrow=True, arrowhead=2,
+                                    arrowcolor="#089981", arrowsize=1, arrowwidth=2,
+                                    ax=0, ay=35, font=dict(color="#ffffff", size=10, family="Arial Black"),
+                                    bgcolor="#089981", bordercolor="#089981", borderwidth=2, borderpad=4
+                                )
+                                detected_entries.append(current_date)
+                        
+                        # Sell Entry Condition (Retracement to Golden Ratios in Down-trend)
+                        elif not trend_up and ratio in [0.5, 0.618, 0.786]:
+                            if c_low <= price <= c_high and current_date not in detected_entries:
+                                fig.add_annotation(
+                                    x=current_date, y=c_high,
+                                    text="🔴 SELL ENTRY", showarrow=True, arrowhead=2,
+                                    arrowcolor="#f23645", arrowsize=1, arrowwidth=2,
+                                    ax=0, ay=-35, font=dict(color="#ffffff", size=10, family="Arial Black"),
+                                    bgcolor="#f23645", bordercolor="#f23645", borderwidth=2, borderpad=4
+                                )
+                                detected_entries.append(current_date)
 
         fig.update_layout(
-            title=f"{ticker} Live Chart with Auto S&R, Fib Levels & Circles",
+            title=f"{ticker} Live Chart | TradingView Colors & Auto Fib Circle Entries",
             yaxis_title="Price", xaxis_title="Date/Time", template="plotly_dark",
-            paper_bgcolor='#11151c', plot_bgcolor='#11151c', xaxis_rangeslider_visible=False,
-            height=720, font=dict(color="#8a99ad")
+            paper_bgcolor='#0b0e14', plot_bgcolor='#0b0e14', xaxis_rangeslider_visible=False,
+            height=750, font=dict(color="#8a99ad")
         )
         
         st.plotly_chart(fig, use_container_width=True)
         
-        st.write("### 🔍 Detected Chart Patterns (Maths Engine)")
-        detected_patterns = []
-        for i in range(len(peaks)-1):
-            p1, p2 = high_prices[peaks[i]], high_prices[peaks[i+1]]
-            if abs(p1 - p2) / p1 < 0.005:
-                detected_patterns.append(f"⚠️ Potential **Double Top** detected near price {round(p1, 2)}")
-                
-        for i in range(len(troughs)-1):
-            t1, t2 = low_prices[troughs[i]], low_prices[troughs[i+1]]
-            if abs(t1 - t2) / t1 < 0.005:
-                detected_patterns.append(f"✅ Potential **Double Bottom** detected near price {round(t1, 2)}")
-                
-        if detected_patterns:
-            for pattern in detected_patterns:
-                st.info(pattern)
+        # Summary Box
+        st.write("### 📊 Live Trade Signals")
+        if detected_entries:
+            for entry_date in detected_entries:
+                st.success(f"🎯 **Automated Entry Triggered** on {entry_date.strftime('%Y-%m-%d %H:%M')} via Golden Fib Circle Intersection.")
         else:
-            st.success("No clear patterns detected at this moment. Market is moving smoothly.")
+            st.info("Waiting for Price to intersect with Fibonacci Circle Golden Zones...")
 
 except Exception as e:
     st.error(f"Something went wrong: {e}")
