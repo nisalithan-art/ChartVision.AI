@@ -16,7 +16,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("📈 Pro Trader Automated Chart Pattern & S&R Tool")
-st.subheader("SMC & ICT Custom Execution Engine - Premium Edition")
+st.subheader("SMC & ICT Multi-OB Forecasting Engine - Premium Edition")
 
 ticker = st.sidebar.text_input("Enter Ticker (e.g., BTC-USD, EURUSD=X, AAPL):", value="BTC-USD")
 timeframe = st.sidebar.selectbox("Select Timeframe:", ["1d", "1h", "15m", "5m"])
@@ -46,18 +46,15 @@ try:
         # --- DYNAMIC ORDER BLOCK CONTROLS ---
         st.sidebar.markdown("---")
         st.sidebar.subheader("🎛️ Custom Order Block Settings")
-        
-        # User can change peak distance and multiplier sensitivity to shift Order Blocks
-        ob_distance = st.sidebar.slider("OB Detection Range (Candle Distance)", 3, 20, 7)
+        ob_distance = st.sidebar.slider("OB Detection Range (Candle Distance)", 3, 20, 10)
         ob_sensitivity = st.sidebar.slider("OB Sensitivity Multiplier", 0.05, 0.50, 0.15, step=0.05)
         
         st.sidebar.markdown("---")
         st.sidebar.subheader("🛠️ Display Settings")
         show_ob = st.sidebar.checkbox("Show Order Blocks (OB)", value=True)
         show_structure = st.sidebar.checkbox("Show BOS & Liquidity Sweeps", value=True)
-        show_trade_setup = st.sidebar.checkbox("Show Entry Line on Chart", value=True)
         
-        # High-precision Peak and Trough Detection based on custom controls
+        # High-precision Peak and Trough Detection
         peaks, _ = find_peaks(high_prices, distance=ob_distance, prominence=np.std(high_prices) * ob_sensitivity)
         troughs, _ = find_peaks(-low_prices, distance=ob_distance, prominence=np.std(low_prices) * ob_sensitivity)
         
@@ -69,7 +66,6 @@ try:
             name="Candlesticks"
         )])
         
-        # To store detailed table rows
         trade_table_data = []
         
         # --- 1. LIQUIDITY SWEEP & BOS ENGINE ---
@@ -79,11 +75,11 @@ try:
         if show_structure:
             for idx in range(20, len(data)):
                 if high_prices[idx] > last_high and close_prices[idx] < last_high:
-                    fig.add_annotation(x=data.index[idx], y=high_prices[idx], text="✖️ LQ SWEEP (Buy Side)",
+                    fig.add_annotation(x=data.index[idx], y=high_prices[idx], text="✖️ LQ SWEEP",
                                        showarrow=True, arrowhead=2, arrowcolor="#ffcc00", font=dict(color="#ffcc00", size=9),
                                        bgcolor="rgba(11, 14, 20, 0.85)", ay=-25)
                 elif low_prices[idx] < last_low and close_prices[idx] > last_low:
-                    fig.add_annotation(x=data.index[idx], y=low_prices[idx], text="✖️ LQ SWEEP (Sell Side)",
+                    fig.add_annotation(x=data.index[idx], y=low_prices[idx], text="✖️ LQ SWEEP",
                                        showarrow=True, arrowhead=2, arrowcolor="#ffcc00", font=dict(color="#ffcc00", size=9),
                                        bgcolor="rgba(11, 14, 20, 0.85)", ay=25)
                 
@@ -91,79 +87,77 @@ try:
                     fig.add_shape(type="line", x0=data.index[idx-5], y0=last_high, x1=data.index[idx], y1=last_high,
                                   line=dict(color="#089981", width=1.5, dash="dot"))
                     last_high = high_prices[idx]
-                    
                 elif close_prices[idx] < last_low:
                     fig.add_shape(type="line", x0=data.index[idx-5], y0=last_low, x1=data.index[idx], y1=last_low,
                                   line=dict(color="#f23645", width=1.5, dash="dot"))
                     last_low = low_prices[idx]
 
-        # --- 2. ORDER BLOCK DETECTION ---
-        active_bullish_ob = None
-        active_bearish_ob = None
-
+        # --- 2. WHOLE-CHART MULTI ORDER BLOCK DETECTION & FORECASTING ---
+        latest_close = close_prices[-1]
+        
         if show_ob:
-            for p in peaks[-3:]:
+            # A. BEARISH ORDER BLOCKS (Analyze all detected peaks across the chart)
+            for p in peaks:
                 if p < len(data) - 2:
-                    active_bearish_ob = {"top": high_prices[p], "bottom": min(open_prices[p], close_prices[p]), "idx": p}
-                    fig.add_shape(type="rect", x0=data.index[p-1], y0=active_bearish_ob["bottom"], x1=data.index[-1], y1=active_bearish_ob["top"],
-                                  fillcolor="rgba(242, 54, 69, 0.08)", line=dict(color="rgba(242, 54, 69, 0.35)", width=1))
-            
-            for t in troughs[-3:]:
+                    ob_top = high_prices[p]
+                    ob_bottom = min(open_prices[p], close_prices[p])
+                    
+                    # Check if this OB is still UNMITIGATED (Price hasn't broken above it since creation)
+                    future_candles_high = high_prices[p+1:]
+                    if len(future_candles_high) > 0 and max(future_candles_high) < ob_top:
+                        
+                        # Plot on Chart
+                        fig.add_shape(type="rect", x0=data.index[p-1], y0=ob_bottom, x1=data.index[-1], y1=ob_top,
+                                      fillcolor="rgba(242, 54, 69, 0.05)", line=dict(color="rgba(242, 54, 69, 0.35)", width=1))
+                        
+                        # Generate Limit/Pending Trade Setup
+                        entry = round(ob_bottom, 2)
+                        sl = round(ob_top + (ob_top - ob_bottom) * 0.15, 2) # 15% Buffer above OB
+                        risk = sl - entry
+                        tp = round(entry - (risk * 3.0), 2) # Target 1:3 RR Matrix
+                        
+                        trade_table_data.append({
+                            "Type": "🔴 BEARISH OB (Short Limit)",
+                            "OB Zone (Top)": round(ob_top, 2),
+                            "Entry / OB Bottom": entry,
+                            "Stop Loss (SL)": sl,
+                            "Take Profit (TP)": tp,
+                            "Risk:Reward": "1 : 3.0",
+                            "OB Formed Date": data.index[p].strftime('%Y-%m-%d %H:%M')
+                        })
+
+            # B. BULLISH ORDER BLOCKS (Analyze all detected troughs across the chart)
+            for t in troughs:
                 if t < len(data) - 2:
-                    active_bullish_ob = {"bottom": low_prices[t], "top": max(open_prices[t], close_prices[t]), "idx": t}
-                    fig.add_shape(type="rect", x0=data.index[t-1], y0=active_bullish_ob["bottom"], x1=data.index[-1], y1=active_bullish_ob["top"],
-                                  fillcolor="rgba(8, 153, 129, 0.08)", line=dict(color="rgba(8, 153, 129, 0.35)", width=1))
-
-        # --- 3. RISK MANAGEMENT & SIGNAL CALCULATOR ---
-        if len(data) > 2:
-            latest_idx = len(data) - 1
-            latest_close = close_prices[latest_idx]
-            signal_time = data.index[latest_idx].strftime('%Y-%m-%d %H:%M')
-            
-            # Long Setup
-            if active_bullish_ob and active_bullish_ob["bottom"] <= latest_close <= active_bullish_ob["top"]:
-                entry = round(latest_close, 2)
-                sl = round(active_bullish_ob["bottom"] - (active_bullish_ob["top"] - active_bullish_ob["bottom"])*0.2, 2)
-                risk = entry - sl
-                tp = round(entry + (risk * 2.5), 2)
-                
-                if show_trade_setup:
-                    fig.add_shape(type="line", x0=data.index[-8], y0=entry, x1=data.index[-1], y1=entry, line=dict(color="#00ffcc", width=2.5))
-                    fig.add_annotation(x=data.index[-1], y=entry, text=f"🎯 ENTRY: {entry}", showarrow=False, bgcolor="#00ffcc", font=dict(color="black", size=10))
-                
-                trade_table_data.append({
-                    "Ticker": ticker,
-                    "Type": "🟢 LONG (Buy)",
-                    "Entry Price": entry,
-                    "Stop Loss (SL)": sl,
-                    "Take Profit (TP)": tp,
-                    "Risk:Reward": "1 : 2.5",
-                    "Trigger Time": signal_time
-                })
-
-            # Short Setup
-            elif active_bearish_ob and active_bearish_ob["bottom"] <= latest_close <= active_bearish_ob["top"]:
-                entry = round(latest_close, 2)
-                sl = round(active_bearish_ob["top"] + (active_bearish_ob["top"] - active_bearish_ob["bottom"])*0.2, 2)
-                risk = sl - entry
-                tp = round(entry - (risk * 2.5), 2)
-                
-                if show_trade_setup:
-                    fig.add_shape(type="line", x0=data.index[-8], y0=entry, x1=data.index[-1], y1=entry, line=dict(color="#00ffcc", width=2.5))
-                    fig.add_annotation(x=data.index[-1], y=entry, text=f"🎯 ENTRY: {entry}", showarrow=False, bgcolor="#00ffcc", font=dict(color="black", size=10))
-                
-                trade_table_data.append({
-                    "Ticker": ticker,
-                    "Type": "🔴 SHORT (Sell)",
-                    "Entry Price": entry,
-                    "Stop Loss (SL)": sl,
-                    "Take Profit (TP)": tp,
-                    "Risk:Reward": "1 : 2.5",
-                    "Trigger Time": signal_time
-                })
+                    ob_bottom = low_prices[t]
+                    ob_top = max(open_prices[t], close_prices[t])
+                    
+                    # Check if this OB is UNMITIGATED (Price hasn't broken below it since creation)
+                    future_candles_low = low_prices[t+1:]
+                    if len(future_candles_low) > 0 and min(future_candles_low) > ob_bottom:
+                        
+                        # Plot on Chart
+                        fig.add_shape(type="rect", x0=data.index[t-1], y0=ob_bottom, x1=data.index[-1], y1=ob_top,
+                                      fillcolor="rgba(8, 153, 129, 0.05)", line=dict(color="rgba(8, 153, 129, 0.35)", width=1))
+                        
+                        # Generate Limit/Pending Trade Setup
+                        entry = round(ob_top, 2)
+                        sl = round(ob_bottom - (ob_top - ob_bottom) * 0.15, 2) # 15% Buffer below OB
+                        risk = entry - sl
+                        tp = round(entry + (risk * 3.0), 2) # Target 1:3 RR Matrix
+                        
+                        trade_table_data.append({
+                            "Type": "🟢 BULLISH OB (Long Limit)",
+                            "OB Zone (Top)": entry,
+                            "Entry / OB Bottom": round(ob_bottom, 2),
+                            "Stop Loss (SL)": sl,
+                            "Take Profit (TP)": tp,
+                            "Risk:Reward": "1 : 3.0",
+                            "OB Formed Date": data.index[t].strftime('%Y-%m-%d %H:%M')
+                        })
 
         fig.update_layout(
-            title=f"{ticker} Live Chart | Dynamic Custom SMC Engine",
+            title=f"{ticker} Live Chart | Whole-Chart SMC Analytics Engine",
             yaxis_title="Price", xaxis_title="Date/Time", template="plotly_dark",
             paper_bgcolor='#0b0e14', plot_bgcolor='#0b0e14', xaxis_rangeslider_visible=False,
             height=700, font=dict(color="#8a99ad")
@@ -171,24 +165,24 @@ try:
         
         st.plotly_chart(fig, use_container_width=True)
         
-        # --- 4. DEDICATED TRADE DETAILS SECTION AT THE BOTTOM ---
+        # --- 3. ADVANCED SIGNAL TABLE AT THE BOTTOM ---
         st.markdown("---")
-        st.write("### 📊 Live Trade Execution Terminal")
+        st.write("### 📊 Active Institutional Order Blocks & Pending Setups")
         
         if trade_table_data:
-            # Convert list of dicts to a clean DataFrame
             df_signals = pd.DataFrame(trade_table_data)
             
-            # Displaying as an interactive clean table
+            # Re-ordering columns for cleaner look
+            df_signals = df_signals[["Type", "OB Formed Date", "OB Zone (Top)", "Entry / OB Bottom", "Stop Loss (SL)", "Take Profit (TP)", "Risk:Reward"]]
+            
             st.dataframe(
                 df_signals, 
                 use_container_width=True,
                 hide_index=True
             )
-            st.success("🔥 Active Smart Money trade setup detected! Check the metrics above for precise management.")
+            st.success(f"🔥 මුළු Chart එකම පරීක්ෂා කර සක්‍රීය (Unmitigated) Strong Order Blocks {len(df_signals)} ක් සොයාගෙන ඇත. මිල මෙම කලාප වලට පැමිණි විට ස්වයංක්‍රීයව Setup ක්‍රියාත්මක වේ.")
         else:
-            # Custom styled empty message table area
-            st.info("⏳ Market is currently calibrating. No active Order Block Mitigation at this exact moment. Change settings in Sidebar to adjust block calculation.")
+            st.info("⏳ දැනට මුළු Chart එකේම ප්‍රබල Unmitigated Order Blocks හමු නොවීය. සයිඩ්බාර් එකෙන් Sensitivity වෙනස් කර බලන්න.")
 
 except Exception as e:
     st.error(f"Something went wrong: {e}")
