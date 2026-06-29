@@ -120,7 +120,6 @@ try:
         
         if show_structure:
             for idx in range(20, len(data)):
-                # High Liquidity Sweep Detection
                 if high_prices[idx] > last_high and close_prices[idx] < last_high:
                     fig.add_annotation(
                         x=data.index[idx], y=high_prices[idx],
@@ -137,7 +136,6 @@ try:
                         font=dict(color="#ffffff", size=9, family="Arial Black"), xanchor="right", yanchor="bottom"
                     )
                     
-                # Low Liquidity Sweep Detection
                 elif low_prices[idx] < last_low and close_prices[idx] > last_low:
                     fig.add_annotation(
                         x=data.index[idx], y=low_prices[idx],
@@ -154,7 +152,6 @@ try:
                         font=dict(color="#ffffff", size=9, family="Arial Black"), xanchor="right", yanchor="top"
                     )
                 
-                # BOS Structure update
                 if close_prices[idx] > last_high:
                     fig.add_shape(type="line", x0=data.index[idx-5], y0=last_high, x1=data.index[idx], y1=last_high, line=dict(color=bull_body_color, width=1.5, dash="dot"))
                     last_high = high_prices[idx]
@@ -164,7 +161,6 @@ try:
 
         # --- 2. ADVANCED ICT METRICS ENGINE (MSS, BSL, SSL, BPR) ---
         if show_ict_metrics:
-            # A. BSL & SSL (Major Swing Highs/Lows acting as Liquidity Pools)
             if len(peaks) > 0:
                 bsl_level = high_prices[peaks[-1]]
                 fig.add_shape(type="line", x0=data.index[peaks[-1]], y0=bsl_level, x1=data.index[-1], y1=bsl_level, line=dict(color="#00ffcc", width=1.5, dash="dash"))
@@ -175,16 +171,35 @@ try:
                 fig.add_shape(type="line", x0=data.index[troughs[-1]], y0=ssl_level, x1=data.index[-1], y1=ssl_level, line=dict(color="#ff33aa", width=1.5, dash="dash"))
                 fig.add_annotation(x=data.index[-1], y=ssl_level, text="SSL (Sellside Liquidity)", showarrow=False, font=dict(color="#ff33aa", size=9), xanchor="right", yanchor="top")
 
-            # B. MSS (Market Structure Shift) & BPR (Balanced Price Range) Detection
-            for idx in range(5, len(data) - 1):
-                # MSS Detection (Price breaks previous short-term swing high with strong close)
-                if close_prices[idx] > high_prices[idx-1] and close_prices[idx-1] <= high_prices[idx-2]:
-                    if close_prices[idx] > last_high:
-                        fig.add_annotation(x=data.index[idx], y=high_prices[idx], text="⚡ MSS (Bullish Shift)", showarrow=True, arrowhead=1, arrowcolor="#00ffcc", font=dict(color="#00ffcc", size=9, family="Arial Black"), bgcolor="rgba(11, 14, 20, 0.8)", ay=-40)
+            # --- HIGH-PROBABILITY FILTERED MSS DETECTION ---
+            # හුදෙක් ඉටිපන්දම් මාරුවක් නොවී, පෙර පැවති ප්‍රධාන Swing High/Low මට්ටම් පමණක් බිඳීම සලකා බලයි
+            recent_highs = [high_prices[p] for p in peaks if p < len(data)]
+            recent_lows = [low_prices[t] for t in troughs if t < len(data)]
+
+            for idx in range(ob_distance, len(data)):
+                # Bullish MSS: Price explicitly closes ABOVE the last valid strong swing high
+                if len(recent_highs) > 0 and close_prices[idx] > recent_highs[-1] and close_prices[idx-1] <= recent_highs[-1]:
+                    fig.add_annotation(
+                        x=data.index[idx], y=high_prices[idx], 
+                        text="⚡ MSS (Bullish Shift)", showarrow=True, arrowhead=1, arrowcolor="#00ffcc", 
+                        font=dict(color="#00ffcc", size=9, family="Arial Black"), 
+                        bgcolor="rgba(11, 14, 20, 0.9)", ay=-45
+                    )
+                    # එකම මට්ටම නැවත මාර්ක් වීම වැළැක්වීමට අගය අලුත් කරයි
+                    recent_highs.append(high_prices[idx])
                 
-                # BPR (Balanced Price Range - Overlapping aggressive buying & selling wicks/bodies)
+                # Bearish MSS: Price explicitly closes BELOW the last valid strong swing low
+                elif len(recent_lows) > 0 and close_prices[idx] < recent_lows[-1] and close_prices[idx-1] >= recent_lows[-1]:
+                    fig.add_annotation(
+                        x=data.index[idx], y=low_prices[idx], 
+                        text="⚡ MSS (Bearish Shift)", showarrow=True, arrowhead=1, arrowcolor="#ff3344", 
+                        font=dict(color="#ff3344", size=9, family="Arial Black"), 
+                        bgcolor="rgba(11, 14, 20, 0.9)", ay=45
+                    )
+                    recent_lows.append(low_prices[idx])
+                
+                # BPR Zone Detection
                 if idx < len(data) - 2:
-                    # Bullish BPR Zone
                     if low_prices[idx] > high_prices[idx+2] and high_prices[idx+1] < low_prices[idx]:
                         bpr_top = low_prices[idx]
                         bpr_bottom = high_prices[idx+2]
@@ -199,7 +214,6 @@ try:
             return f"rgba({rgb[0]}, {rgb[1]}, {rgb[2]}, {opacity})"
 
         if show_ob:
-            # Bearish OB (POI Short)
             for p in peaks:
                 if p < len(data) - 2:
                     ob_top = high_prices[p]
@@ -223,7 +237,6 @@ try:
                             "OB Formed Date": data.index[p].strftime('%Y-%m-%d %H:%M')
                         })
                         
-            # Bullish OB (POI Long)
             for t in troughs:
                 if t < len(data) - 2:
                     ob_bottom = low_prices[t]
