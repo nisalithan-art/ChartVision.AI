@@ -19,8 +19,10 @@ st.title("📈 Pro Trader Automated Chart Pattern & S&R Tool")
 st.subheader("SMC & ICT Multi-OB Forecasting Engine - Premium Edition")
 
 ticker = st.sidebar.text_input("Enter Ticker (e.g., BTC-USD, EURUSD=X, AAPL):", value="BTC-USD")
-timeframe = st.sidebar.selectbox("Select Timeframe:", ["1d", "1h", "15m", "5m"])
-period = st.sidebar.selectbox("Select Period (Data Range):", ["3mo", "1mo", "7d", "1d"])
+
+# --- UPDATED TIMEFRAMES & PERIODS ---
+timeframe = st.sidebar.selectbox("Select Timeframe:", ["1d", "4h", "2h", "1h", "30m", "15m", "5m"])
+period = st.sidebar.selectbox("Select Period (Data Range):", ["1y", "6mo", "3mo", "1mo", "7d", "1d"])
 
 @st.cache_data
 def load_data(symbol, p, tf):
@@ -168,10 +170,8 @@ try:
             df_signals = df_signals[["Type", "OB Formed Date", "OB Zone (Top)", "Entry / OB Bottom", "Stop Loss (SL)", "Take Profit (TP)", "Risk:Reward"]]
             st.dataframe(df_signals, use_container_width=True, hide_index=True)
             
-            # මෙතන සිංහල පණිවිඩය වෙනුවට English එක ඇතුළත් කර ඇත
             st.success(f"🔥 Chart analysis complete. Successfully identified {len(df_signals)} active (Unmitigated) strong Order Blocks. Setups will trigger automatically when the price reaches these zones.")
         else:
-            # මෙතනද English පණිවිඩය ඇතුළත් කර ඇත
             st.info("⏳ No strong unmitigated Order Blocks found across the chart currently. Try adjusting the sensitivity from the sidebar.")
 
 except Exception as e:
