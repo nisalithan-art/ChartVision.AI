@@ -7,7 +7,7 @@ from scipy.signal import find_peaks
 
 st.set_page_config(page_title="Pro Trader AI-Less Tool", layout="wide")
 
-# --- OPTIMIZED CSS FOR MAXIMUM CHART SPACE ---
+# --- OPTIMIZED CSS FOR MAXIMUM CHART SPACE & THEME ---
 st.markdown("""
 <style>
 .stApp {background-color: #0b0e14; color: #ecf0f1; }
@@ -192,15 +192,28 @@ try:
                         
         fig.update_layout(
             title=f"{ticker} Live Chart | Whole-Chart SMC Analytics Engine",
-            yaxis_title="Price",
             xaxis_title="Date/Time",
             template="plotly_dark",
             paper_bgcolor='#0b0e14',
             plot_bgcolor='#0b0e14',
             xaxis_rangeslider_visible=False,
-            height=780,  # <--- CHART HEIGHT එක 700 සිට 780 දක්වා වැඩි කර ලොකු කරන ලදී
+            height=780,  
             font=dict(color="#8a99ad"),
-            margin=dict(t=30, b=10, l=10, r=10) # Chart එක වටේ හිස් ඉඩ (Margin) අවම කිරීම
+            margin=dict(t=30, b=10, l=10, r=50), # දකුණු පස මිල ගණන් වලට ඉඩ තැබීම
+            
+            # මිල ගණන් දර්ශකය (Price Scale) දකුණු පසින් තැබීම සඳහා වූ Update එක
+            yaxis=dict(
+                title="Price",
+                side="right",             # <--- Price Axis එක දකුණු පැත්තට මාරු කිරීම
+                showgrid=True,
+                gridcolor="rgba(42, 46, 57, 0.4)",
+                ticks="outside",
+                tickfont=dict(color="#8a99ad")
+            ),
+            xaxis=dict(
+                showgrid=True,
+                gridcolor="rgba(42, 46, 57, 0.4)"
+            )
         )
         st.plotly_chart(fig, use_container_width=True)
         
