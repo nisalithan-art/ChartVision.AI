@@ -7,16 +7,37 @@ from scipy.signal import find_peaks
 
 st.set_page_config(page_title="Pro Trader AI-Less Tool", layout="wide")
 
+# --- OPTIMIZED CSS FOR MAXIMUM CHART SPACE ---
 st.markdown("""
 <style>
 .stApp {background-color: #0b0e14; color: #ecf0f1; }
-h1, h2, h3 {color: #00ffcc !important; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+/* Headline සහ Subheader වල Font Size සහ Margin අඩු කර ඉඩ ඉතිරි කිරීම */
+h1 {
+    color: #00ffcc !important; 
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
+    font-size: 22px !important; 
+    margin-top: -40px !important; 
+    margin-bottom: 2px !important;
+}
+h3 {
+    color: #8a99ad !important; 
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
+    font-size: 13px !important; 
+    margin-top: 0px !important; 
+    margin-bottom: 10px !important;
+}
 div[data-testid="stMetricValue"] { color: #00ffcc !important; }
+/* Streamlit වල default උඩ ඉඩ (Padding) අඩු කිරීම */
+.block-container {
+    padding-top: 1.5rem !important;
+    padding-bottom: 0rem !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
-st.title("📈 Pro Trader Automated Chart Pattern & S&R Tool")
-st.subheader("SMC & ICT Multi-OB Forecasting Engine - Premium Edition")
+# කුඩා කළ Headlines
+st.markdown("<h1>📈 Pro Trader Automated Chart Pattern & S&R Tool</h1>", unsafe_allow_html=True)
+st.markdown("<h3>SMC & ICT Multi-OB Forecasting Engine - Premium Edition</h3>", unsafe_allow_html=True)
 
 ticker = st.sidebar.text_input("Enter Ticker (e.g., BTC-USD, EURUSD=X, AAPL):", value="BTC-USD")
 
@@ -76,7 +97,7 @@ try:
         
         trade_table_data = []
         
-        # --- 1. LIQUIDITY SWEEP ENGINE (WITH TRADINGVIEW EXTENDED HORIZONTAL LINES) ---
+        # --- 1. LIQUIDITY SWEEP ENGINE ---
         last_high = high_prices[peaks[-1]] if len(peaks) > 0 else max(high_prices)
         last_low = low_prices[troughs[-1]] if len(troughs) > 0 else min(low_prices)
         
@@ -84,21 +105,18 @@ try:
             for idx in range(20, len(data)):
                 # High Liquidity Sweep Detection
                 if high_prices[idx] > last_high and close_prices[idx] < last_high:
-                    # 1. ✖️ LQ SWEEP Label Label
                     fig.add_annotation(
                         x=data.index[idx], y=high_prices[idx],
                         text="✖️ LQ SWEEP", showarrow=True, arrowhead=2, arrowcolor="#ffcc00",
                         font=dict(color="#000000", size=9, family="Arial Black"),
                         bgcolor="#ffcc00", ay=-35
                     )
-                    # 2. Continuous Horizontal Trigger Line (ඇඳී යන සුදු පැහැති රේඛාව)
                     fig.add_shape(
                         type="line",
                         x0=data.index[idx-10 if idx-10 >= 0 else 0], y0=last_high,
                         x1=data.index[-1], y1=last_high,
                         line=dict(color="#ffffff", width=2, dash="solid")
                     )
-                    # 3. Text Label on the Right End
                     fig.add_annotation(
                         x=data.index[-1], y=last_high,
                         text="LQ SWEEP TRIGGER LEVEL", showarrow=False,
@@ -108,21 +126,18 @@ try:
                     
                 # Low Liquidity Sweep Detection
                 elif low_prices[idx] < last_low and close_prices[idx] > last_low:
-                    # 1. ✖️ LQ SWEEP Label
                     fig.add_annotation(
                         x=data.index[idx], y=low_prices[idx],
                         text="✖️ LQ SWEEP", showarrow=True, arrowhead=2, arrowcolor="#ffcc00",
                         font=dict(color="#000000", size=9, family="Arial Black"),
                         bgcolor="#ffcc00", ay=35
                     )
-                    # 2. Continuous Horizontal Trigger Line
                     fig.add_shape(
                         type="line",
                         x0=data.index[idx-10 if idx-10 >= 0 else 0], y0=last_low,
                         x1=data.index[-1], y1=last_low,
                         line=dict(color="#ffffff", width=2, dash="solid")
                     )
-                    # 3. Text Label on the Right End
                     fig.add_annotation(
                         x=data.index[-1], y=last_low,
                         text="LQ SWEEP TRIGGER LEVEL", showarrow=False,
@@ -130,7 +145,6 @@ try:
                         xanchor="right", yanchor="top"
                     )
                 
-                # Update Structure Levels for BOS
                 if close_prices[idx] > last_high:
                     fig.add_shape(type="line", x0=data.index[idx-5], y0=last_high, x1=data.index[idx], y1=last_high, line=dict(color="#089981", width=1.5, dash="dot"))
                     last_high = high_prices[idx]
@@ -138,56 +152,40 @@ try:
                     fig.add_shape(type="line", x0=data.index[idx-5], y0=last_low, x1=data.index[idx], y1=last_low, line=dict(color="#f23645", width=1.5, dash="dot"))
                     last_low = low_prices[idx]
                     
-        # --- 2. WHOLE-CHART MULTI ORDER BLOCK DETECTION & FORECASTING ---
-        latest_close = close_prices[-1]
-        
+        # --- 2. WHOLE-CHART MULTI ORDER BLOCK DETECTION ---
         if show_ob:
-            # A. BEARISH ORDER BLOCKS
             for p in peaks:
                 if p < len(data) - 2:
                     ob_top = high_prices[p]
                     ob_bottom = min(open_prices[p], close_prices[p])
-                    
                     future_candles_high = high_prices[p+1:]
                     if len(future_candles_high) > 0 and max(future_candles_high) < ob_top:
                         fig.add_shape(type="rect", x0=data.index[p-1], y0=ob_bottom, x1=data.index[-1], y1=ob_top, fillcolor="rgba(242, 54, 69, 0.05)", line=dict(color="rgba(242, 54, 69, 0.35)", width=1))
                         
-                        entry = round(ob_bottom, 2)
-                        sl = round(ob_top + (ob_top - ob_bottom) * 0.15, 2)
-                        risk = sl - entry
-                        tp = round(entry - (risk * 3.0), 2)
-                        
                         trade_table_data.append({
                             "Type": "🔴 BEARISH OB (Short Limit)",
                             "OB Zone (Top)": round(ob_top, 2),
-                            "Entry / OB Bottom": entry,
-                            "Stop Loss (SL)": sl,
-                            "Take Profit (TP)": tp,
+                            "Entry / OB Bottom": round(ob_bottom, 2),
+                            "Stop Loss (SL)": round(ob_top + (ob_top - ob_bottom) * 0.15, 2),
+                            "Take Profit (TP)": round(round(ob_bottom, 2) - ((round(ob_top + (ob_top - ob_bottom) * 0.15, 2) - round(ob_bottom, 2)) * 3.0), 2),
                             "Risk:Reward": "1 : 3.0",
                             "OB Formed Date": data.index[p].strftime('%Y-%m-%d %H:%M')
                         })
                         
-            # B. BULLISH ORDER BLOCKS
             for t in troughs:
                 if t < len(data) - 2:
                     ob_bottom = low_prices[t]
                     ob_top = max(open_prices[t], close_prices[t])
-                    
                     future_candles_low = low_prices[t+1:]
                     if len(future_candles_low) > 0 and min(future_candles_low) > ob_bottom:
                         fig.add_shape(type="rect", x0=data.index[t-1], y0=ob_bottom, x1=data.index[-1], y1=ob_top, fillcolor="rgba(8, 153, 129, 0.05)", line=dict(color="rgba(8, 153, 129, 0.35)", width=1))
                         
-                        entry = round(ob_top, 2)
-                        sl = round(ob_bottom - (ob_top - ob_bottom) * 0.15, 2)
-                        risk = entry - sl
-                        tp = round(entry + (risk * 3.0), 2)
-                        
                         trade_table_data.append({
                             "Type": "🟢 BULLISH OB (Long Limit)",
-                            "OB Zone (Top)": entry,
+                            "OB Zone (Top)": round(ob_top, 2),
                             "Entry / OB Bottom": round(ob_bottom, 2),
-                            "Stop Loss (SL)": sl,
-                            "Take Profit (TP)": tp,
+                            "Stop Loss (SL)": round(ob_bottom - (ob_top - ob_bottom) * 0.15, 2),
+                            "Take Profit (TP)": round(round(ob_top, 2) + ((round(ob_top, 2) - round(ob_bottom - (ob_top - ob_bottom) * 0.15, 2)) * 3.0), 2),
                             "Risk:Reward": "1 : 3.0",
                             "OB Formed Date": data.index[t].strftime('%Y-%m-%d %H:%M')
                         })
@@ -200,12 +198,13 @@ try:
             paper_bgcolor='#0b0e14',
             plot_bgcolor='#0b0e14',
             xaxis_rangeslider_visible=False,
-            height=700,
-            font=dict(color="#8a99ad")
+            height=780,  # <--- CHART HEIGHT එක 700 සිට 780 දක්වා වැඩි කර ලොකු කරන ලදී
+            font=dict(color="#8a99ad"),
+            margin=dict(t=30, b=10, l=10, r=10) # Chart එක වටේ හිස් ඉඩ (Margin) අවම කිරීම
         )
         st.plotly_chart(fig, use_container_width=True)
         
-        # --- 3. ADVANCED SIGNAL TABLE AT THE BOTTOM ---
+        # --- 3. ADVANCED SIGNAL TABLE ---
         st.markdown("---")
         st.write("### 📊 Active Institutional Order Blocks & Pending Setups")
         
@@ -213,10 +212,9 @@ try:
             df_signals = pd.DataFrame(trade_table_data)
             df_signals = df_signals[["Type", "OB Formed Date", "OB Zone (Top)", "Entry / OB Bottom", "Stop Loss (SL)", "Take Profit (TP)", "Risk:Reward"]]
             st.dataframe(df_signals, use_container_width=True, hide_index=True)
-            
-            st.success(f"🔥 Chart analysis complete. Successfully identified {len(df_signals)} active (Unmitigated) strong Order Blocks. Setups will trigger automatically when the price reaches these zones.")
+            st.success(f"🔥 Chart analysis complete. Successfully identified {len(df_signals)} active (Unmitigated) strong Order Blocks.")
         else:
-            st.info("⏳ No strong unmitigated Order Blocks found across the chart currently. Try adjusting the sensitivity from the sidebar.")
+            st.info("⏳ No strong unmitigated Order Blocks found across the chart currently.")
 
 except Exception as e:
     st.error(f"Something went wrong: {e}")
