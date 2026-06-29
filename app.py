@@ -20,7 +20,7 @@ st.subheader("SMC & ICT Multi-OB Forecasting Engine - Premium Edition")
 
 ticker = st.sidebar.text_input("Enter Ticker (e.g., BTC-USD, EURUSD=X, AAPL):", value="BTC-USD")
 
-# --- UPDATED TIMEFRAMES & PERIODS ---
+# --- TIMEFRAMES & PERIODS ---
 timeframe = st.sidebar.selectbox("Select Timeframe:", ["1d", "4h", "2h", "1h", "30m", "15m", "5m"])
 period = st.sidebar.selectbox("Select Period (Data Range):", ["1y", "6mo", "3mo", "1mo", "7d", "1d"])
 
@@ -76,17 +76,61 @@ try:
         
         trade_table_data = []
         
-        # --- 1. LIQUIDITY SWEEP & BOS ENGINE ---
+        # --- 1. LIQUIDITY SWEEP ENGINE (WITH TRADINGVIEW EXTENDED HORIZONTAL LINES) ---
         last_high = high_prices[peaks[-1]] if len(peaks) > 0 else max(high_prices)
         last_low = low_prices[troughs[-1]] if len(troughs) > 0 else min(low_prices)
         
         if show_structure:
             for idx in range(20, len(data)):
+                # High Liquidity Sweep Detection
                 if high_prices[idx] > last_high and close_prices[idx] < last_high:
-                    fig.add_annotation(x=data.index[idx], y=high_prices[idx], text="✖️ LQ SWEEP", showarrow=True, arrowhead=2, arrowcolor="#ffcc00", font=dict(color="#ffcc00", size=9), bgcolor="rgba(11, 14, 20, 0.85)", ay=-25)
+                    # 1. ✖️ LQ SWEEP Label Label
+                    fig.add_annotation(
+                        x=data.index[idx], y=high_prices[idx],
+                        text="✖️ LQ SWEEP", showarrow=True, arrowhead=2, arrowcolor="#ffcc00",
+                        font=dict(color="#000000", size=9, family="Arial Black"),
+                        bgcolor="#ffcc00", ay=-35
+                    )
+                    # 2. Continuous Horizontal Trigger Line (ඇඳී යන සුදු පැහැති රේඛාව)
+                    fig.add_shape(
+                        type="line",
+                        x0=data.index[idx-10 if idx-10 >= 0 else 0], y0=last_high,
+                        x1=data.index[-1], y1=last_high,
+                        line=dict(color="#ffffff", width=2, dash="solid")
+                    )
+                    # 3. Text Label on the Right End
+                    fig.add_annotation(
+                        x=data.index[-1], y=last_high,
+                        text="LQ SWEEP TRIGGER LEVEL", showarrow=False,
+                        font=dict(color="#ffffff", size=9, family="Arial Black"),
+                        xanchor="right", yanchor="bottom"
+                    )
+                    
+                # Low Liquidity Sweep Detection
                 elif low_prices[idx] < last_low and close_prices[idx] > last_low:
-                    fig.add_annotation(x=data.index[idx], y=low_prices[idx], text="✖️ LQ SWEEP", showarrow=True, arrowhead=2, arrowcolor="#ffcc00", font=dict(color="#ffcc00", size=9), bgcolor="rgba(11, 14, 20, 0.85)", ay=25)
+                    # 1. ✖️ LQ SWEEP Label
+                    fig.add_annotation(
+                        x=data.index[idx], y=low_prices[idx],
+                        text="✖️ LQ SWEEP", showarrow=True, arrowhead=2, arrowcolor="#ffcc00",
+                        font=dict(color="#000000", size=9, family="Arial Black"),
+                        bgcolor="#ffcc00", ay=35
+                    )
+                    # 2. Continuous Horizontal Trigger Line
+                    fig.add_shape(
+                        type="line",
+                        x0=data.index[idx-10 if idx-10 >= 0 else 0], y0=last_low,
+                        x1=data.index[-1], y1=last_low,
+                        line=dict(color="#ffffff", width=2, dash="solid")
+                    )
+                    # 3. Text Label on the Right End
+                    fig.add_annotation(
+                        x=data.index[-1], y=last_low,
+                        text="LQ SWEEP TRIGGER LEVEL", showarrow=False,
+                        font=dict(color="#ffffff", size=9, family="Arial Black"),
+                        xanchor="right", yanchor="top"
+                    )
                 
+                # Update Structure Levels for BOS
                 if close_prices[idx] > last_high:
                     fig.add_shape(type="line", x0=data.index[idx-5], y0=last_high, x1=data.index[idx], y1=last_high, line=dict(color="#089981", width=1.5, dash="dot"))
                     last_high = high_prices[idx]
