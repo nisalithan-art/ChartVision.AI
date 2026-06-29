@@ -69,17 +69,24 @@ try:
         ob_distance = st.sidebar.slider("OB Detection Range (Candle Distance)", 3, 20, 10)
         ob_sensitivity = st.sidebar.slider("OB Sensitivity Multiplier", 0.05, 0.50, 0.15, step=0.05)
         
+        # --- NEW DYNAMIC OB LENGTH CONTROL ---
+        ob_length = st.sidebar.slider("Order Block Box Length (Candles to extend)", 5, 100, 30)
+        
         # --- NEW COLOR CUSTOMIZATION CONTROLS ---
         st.sidebar.markdown("---")
         st.sidebar.subheader("🎨 Customize Chart & Box Colors")
         
-        # Candlestick Colors
-        st.sidebar.markdown("**Candlestick Colors**")
-        bull_candle_color = st.sidebar.color_picker("Bullish (Up) Candle", "#089981")
-        bear_candle_color = st.sidebar.color_picker("Bearish (Down) Candle", "#f23645")
+        # Candlestick Body & Border Colors Separately
+        st.sidebar.markdown("**🟢 Bullish Candle Settings**")
+        bull_body_color = st.sidebar.color_picker("Bullish Body Color", "#089981")
+        bull_border_color = st.sidebar.color_picker("Bullish Border & Wick Color", "#089981")
+        
+        st.sidebar.markdown("**🔴 Bearish Candle Settings**")
+        bear_body_color = st.sidebar.color_picker("Bearish Body Color", "#f23645")
+        bear_border_color = st.sidebar.color_picker("Bearish Border & Wick Color", "#f23645")
         
         # Order Block Box Colors
-        st.sidebar.markdown("**Order Block (OB) Box Colors**")
+        st.sidebar.markdown("**📦 Order Block (OB) Box Colors**")
         bull_ob_color = st.sidebar.color_picker("Bullish OB Box Color", "#089981")
         bear_ob_color = st.sidebar.color_picker("Bearish OB Box Color", "#f23645")
         ob_opacity = st.sidebar.slider("OB Box Opacity", 0.01, 0.30, 0.05, step=0.01)
@@ -93,17 +100,17 @@ try:
         peaks, _ = find_peaks(high_prices, distance=ob_distance, prominence=np.std(high_prices) * ob_sensitivity)
         troughs, _ = find_peaks(-low_prices, distance=ob_distance, prominence=np.std(low_prices) * ob_sensitivity)
         
-        # Dynamic Candlestick Generation with Custom Colors
+        # Candlestick Generation with Separate Body and Border/Wick Colors
         fig = go.Figure(data=[go.Candlestick(
             x=data.index,
             open=data['Open'],
             high=data['High'],
             low=data['Low'],
             close=data['Close'],
-            increasing_fillcolor=bull_candle_color,
-            increasing_line_color=bull_candle_color,
-            decreasing_fillcolor=bear_candle_color,
-            decreasing_line_color=bear_candle_color,
+            increasing_fillcolor=bull_body_color,
+            increasing_line_color=bull_border_color, # Border සහ Wick පාට
+            decreasing_fillcolor=bear_body_color,
+            decreasing_line_color=bear_border_color, # Border සහ Wick පාට
             name="Candlesticks"
         )])
         
@@ -156,14 +163,13 @@ try:
                     )
                 
                 if close_prices[idx] > last_high:
-                    fig.add_shape(type="line", x0=data.index[idx-5], y0=last_high, x1=data.index[idx], y1=last_high, line=dict(color=bull_candle_color, width=1.5, dash="dot"))
+                    fig.add_shape(type="line", x0=data.index[idx-5], y0=last_high, x1=data.index[idx], y1=last_high, line=dict(color=bull_body_color, width=1.5, dash="dot"))
                     last_high = high_prices[idx]
                 elif close_prices[idx] < last_low:
-                    fig.add_shape(type="line", x0=data.index[idx-5], y0=last_low, x1=data.index[idx], y1=last_low, line=dict(color=bear_candle_color, width=1.5, dash="dot"))
+                    fig.add_shape(type="line", x0=data.index[idx-5], y0=last_low, x1=data.index[idx], y1=last_low, line=dict(color=bear_body_color, width=1.5, dash="dot"))
                     last_low = low_prices[idx]
                     
         # --- 2. WHOLE-CHART MULTI ORDER BLOCK DETECTION WITH CUSTOM COLORS ---
-        # Hex Color එක RGBA වලට හරවන Function එක (Opacity එක වෙනස් කරන්න පහසු වීමට)
         def hex_to_rgba(hex_str, opacity):
             hex_str = hex_str.lstrip('#')
             lv = len(hex_str)
@@ -178,8 +184,10 @@ try:
                     ob_bottom = min(open_prices[p], close_prices[p])
                     future_candles_high = high_prices[p+1:]
                     if len(future_candles_high) > 0 and max(future_candles_high) < ob_top:
+                        # Sidebar එකෙන් දෙන දිග ප්‍රමාණය අනුව Box එක අවසන් වන තැන තීරණය කිරීම
+                        end_idx = min(p + ob_length, len(data) - 1)
                         fig.add_shape(
-                            type="rect", x0=data.index[p-1], y0=ob_bottom, x1=data.index[-1], y1=ob_top,
+                            type="rect", x0=data.index[p-1], y0=ob_bottom, x1=data.index[end_idx], y1=ob_top,
                             fillcolor=hex_to_rgba(bear_ob_color, ob_opacity),
                             line=dict(color=bear_ob_color, width=1)
                         )
@@ -201,8 +209,9 @@ try:
                     ob_top = max(open_prices[t], close_prices[t])
                     future_candles_low = low_prices[t+1:]
                     if len(future_candles_low) > 0 and min(future_candles_low) > ob_bottom:
+                        end_idx = min(t + ob_length, len(data) - 1)
                         fig.add_shape(
-                            type="rect", x0=data.index[t-1], y0=ob_bottom, x1=data.index[-1], y1=ob_top,
+                            type="rect", x0=data.index[t-1], y0=ob_bottom, x1=data.index[end_idx], y1=ob_top,
                             fillcolor=hex_to_rgba(bull_ob_color, ob_opacity),
                             line=dict(color=bull_ob_color, width=1)
                         )
