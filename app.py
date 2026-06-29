@@ -70,6 +70,11 @@ try:
         ob_sensitivity = st.sidebar.slider("OB Sensitivity Multiplier", 0.05, 0.50, 0.15, step=0.05)
         ob_length = st.sidebar.slider("Order Block Box Length (Candles to extend)", 5, 100, 30)
         
+        # --- NEW BSL/SSL COUNT CONTROL ---
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("🎯 Liquidity Level Settings")
+        liquidity_count = st.sidebar.slider("BSL / SSL Levels to Display", 1, 10, 4)
+        
         # --- COLOR CUSTOMIZATION CONTROLS ---
         st.sidebar.markdown("---")
         st.sidebar.subheader("🎨 Customize Chart & Box Colors")
@@ -131,11 +136,6 @@ try:
                         type="line", x0=data.index[idx-10 if idx-10 >= 0 else 0], y0=last_high,
                         x1=data.index[-1], y1=last_high, line=dict(color="#ffffff", width=2, dash="solid")
                     )
-                    fig.add_annotation(
-                        x=data.index[-1], y=last_high, text="LQ SWEEP TRIGGER LEVEL", showarrow=False,
-                        font=dict(color="#ffffff", size=9, family="Arial Black"), xanchor="right", yanchor="bottom"
-                    )
-                    
                 elif low_prices[idx] < last_low and close_prices[idx] > last_low:
                     fig.add_annotation(
                         x=data.index[idx], y=low_prices[idx],
@@ -147,10 +147,6 @@ try:
                         type="line", x0=data.index[idx-10 if idx-10 >= 0 else 0], y0=last_low,
                         x1=data.index[-1], y1=last_low, line=dict(color="#ffffff", width=2, dash="solid")
                     )
-                    fig.add_annotation(
-                        x=data.index[-1], y=last_low, text="LQ SWEEP TRIGGER LEVEL", showarrow=False,
-                        font=dict(color="#ffffff", size=9, family="Arial Black"), xanchor="right", yanchor="top"
-                    )
                 
                 if close_prices[idx] > last_high:
                     fig.add_shape(type="line", x0=data.index[idx-5], y0=last_high, x1=data.index[idx], y1=last_high, line=dict(color=bull_body_color, width=1.5, dash="dot"))
@@ -159,52 +155,50 @@ try:
                     fig.add_shape(type="line", x0=data.index[idx-5], y0=last_low, x1=data.index[idx], y1=last_low, line=dict(color=bear_body_color, width=1.5, dash="dot"))
                     last_low = low_prices[idx]
 
-        # --- 2. ADVANCED ICT METRICS ENGINE (MSS, BSL, SSL, BPR) ---
+        # --- 2. ADVANCED ICT METRICS ENGINE (MULTI BSL / SSL) ---
         if show_ict_metrics:
-            if len(peaks) > 0:
-                bsl_level = high_prices[peaks[-1]]
-                fig.add_shape(type="line", x0=data.index[peaks[-1]], y0=bsl_level, x1=data.index[-1], y1=bsl_level, line=dict(color="#00ffcc", width=1.5, dash="dash"))
-                fig.add_annotation(x=data.index[-1], y=bsl_level, text="BSL (Buyside Liquidity)", showarrow=False, font=dict(color="#00ffcc", size=9), xanchor="right", yanchor="bottom")
-                
-            if len(troughs) > 0:
-                ssl_level = low_prices[troughs[-1]]
-                fig.add_shape(type="line", x0=data.index[troughs[-1]], y0=ssl_level, x1=data.index[-1], y1=ssl_level, line=dict(color="#ff33aa", width=1.5, dash="dash"))
-                fig.add_annotation(x=data.index[-1], y=ssl_level, text="SSL (Sellside Liquidity)", showarrow=False, font=dict(color="#ff33aa", size=9), xanchor="right", yanchor="top")
+            # මෑතකදී ඇතිවූ ප්‍රධාන Peaks / Troughs කිහිපයක්ම Loop එකක් මඟින් සලකා බැලීම
+            # Slider එකෙන් දෙන ප්‍රමාණයට (e.g. 4) මට්ටම් පෙන්වයි
+            display_peaks = peaks[-liquidity_count:] if len(peaks) >= liquidity_count else peaks
+            display_troughs = troughs[-liquidity_count:] if len(troughs) >= liquidity_count else troughs
 
-            # --- HIGH-PROBABILITY FILTERED MSS DETECTION ---
-            # හුදෙක් ඉටිපන්දම් මාරුවක් නොවී, පෙර පැවති ප්‍රධාන Swing High/Low මට්ටම් පමණක් බිඳීම සලකා බලයි
+            # Multi Buyside Liquidity (BSL) Lines
+            for p_idx in display_peaks:
+                bsl_level = high_prices[p_idx]
+                fig.add_shape(type="line", x0=data.index[p_idx], y0=bsl_level, x1=data.index[-1], y1=bsl_level, line=dict(color="#00ffcc", width=1.2, dash="dash"))
+                fig.add_annotation(x=data.index[-1], y=bsl_level, text="BSL", showarrow=False, font=dict(color="#00ffcc", size=8), xanchor="right", yanchor="bottom")
+                
+            # Multi Sellside Liquidity (SSL) Lines
+            for t_idx in display_troughs:
+                ssl_level = low_prices[t_idx]
+                fig.add_shape(type="line", x0=data.index[t_idx], y0=ssl_level, x1=data.index[-1], y1=ssl_level, line=dict(color="#ff33aa", width=1.2, dash="dash"))
+                fig.add_annotation(x=data.index[-1], y=ssl_level, text="SSL", showarrow=False, font=dict(color="#ff33aa", size=8), xanchor="right", yanchor="top")
+
+            # High-Probability Filtered MSS Detection
             recent_highs = [high_prices[p] for p in peaks if p < len(data)]
             recent_lows = [low_prices[t] for t in troughs if t < len(data)]
 
             for idx in range(ob_distance, len(data)):
-                # Bullish MSS: Price explicitly closes ABOVE the last valid strong swing high
                 if len(recent_highs) > 0 and close_prices[idx] > recent_highs[-1] and close_prices[idx-1] <= recent_highs[-1]:
                     fig.add_annotation(
                         x=data.index[idx], y=high_prices[idx], 
                         text="⚡ MSS (Bullish Shift)", showarrow=True, arrowhead=1, arrowcolor="#00ffcc", 
-                        font=dict(color="#00ffcc", size=9, family="Arial Black"), 
-                        bgcolor="rgba(11, 14, 20, 0.9)", ay=-45
+                        font=dict(color="#00ffcc", size=9, family="Arial Black"), bgcolor="rgba(11, 14, 20, 0.9)", ay=-45
                     )
-                    # එකම මට්ටම නැවත මාර්ක් වීම වැළැක්වීමට අගය අලුත් කරයි
                     recent_highs.append(high_prices[idx])
-                
-                # Bearish MSS: Price explicitly closes BELOW the last valid strong swing low
                 elif len(recent_lows) > 0 and close_prices[idx] < recent_lows[-1] and close_prices[idx-1] >= recent_lows[-1]:
                     fig.add_annotation(
                         x=data.index[idx], y=low_prices[idx], 
                         text="⚡ MSS (Bearish Shift)", showarrow=True, arrowhead=1, arrowcolor="#ff3344", 
-                        font=dict(color="#ff3344", size=9, family="Arial Black"), 
-                        bgcolor="rgba(11, 14, 20, 0.9)", ay=45
+                        font=dict(color="#ff3344", size=9, family="Arial Black"), bgcolor="rgba(11, 14, 20, 0.9)", ay=45
                     )
                     recent_lows.append(low_prices[idx])
                 
-                # BPR Zone Detection
                 if idx < len(data) - 2:
                     if low_prices[idx] > high_prices[idx+2] and high_prices[idx+1] < low_prices[idx]:
                         bpr_top = low_prices[idx]
                         bpr_bottom = high_prices[idx+2]
                         fig.add_shape(type="rect", x0=data.index[idx], y0=bpr_bottom, x1=data.index[-1], y1=bpr_top, fillcolor="rgba(255, 165, 0, 0.03)", line=dict(color="rgba(255, 165, 0, 0.2)", width=1, dash="dot"))
-                        fig.add_annotation(x=data.index[-1], y=bpr_top, text="BPR Zone", showarrow=False, font=dict(color="orange", size=8), xanchor="right")
 
         # --- 3. WHOLE-CHART POI / ORDER BLOCK DETECTION ---
         def hex_to_rgba(hex_str, opacity):
@@ -225,8 +219,6 @@ try:
                             type="rect", x0=data.index[p-1], y0=ob_bottom, x1=data.index[end_idx], y1=ob_top,
                             fillcolor=hex_to_rgba(bear_ob_color, ob_opacity), line=dict(color=bear_ob_color, width=1)
                         )
-                        fig.add_annotation(x=data.index[p], y=ob_top, text="POI (Bearish OB)", showarrow=False, font=dict(color=bear_ob_color, size=8), yanchor="bottom")
-                        
                         trade_table_data.append({
                             "Type": "🔴 POI / BEARISH OB",
                             "OB Zone (Top)": round(ob_top, 2),
@@ -248,8 +240,6 @@ try:
                             type="rect", x0=data.index[t-1], y0=ob_bottom, x1=data.index[end_idx], y1=ob_top,
                             fillcolor=hex_to_rgba(bull_ob_color, ob_opacity), line=dict(color=bull_ob_color, width=1)
                         )
-                        fig.add_annotation(x=data.index[t], y=ob_bottom, text="POI (Bullish OB)", showarrow=False, font=dict(color=bull_ob_color, size=8), yanchor="top")
-                        
                         trade_table_data.append({
                             "Type": "🟢 POI / BULLISH OB",
                             "OB Zone (Top)": round(ob_top, 2),
@@ -283,7 +273,6 @@ try:
             df_signals = pd.DataFrame(trade_table_data)
             df_signals = df_signals[["Type", "OB Formed Date", "OB Zone (Top)", "Entry / OB Bottom", "Stop Loss (SL)", "Take Profit (TP)", "Risk:Reward"]]
             st.dataframe(df_signals, use_container_width=True, hide_index=True)
-            st.success(f"🔥 Chart analysis complete. Successfully identified {len(df_signals)} active (Unmitigated) POI Order Blocks.")
         else:
             st.info("⏳ No strong unmitigated Order Blocks found across the chart currently.")
 
