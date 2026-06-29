@@ -333,7 +333,7 @@ try:
         with st.form("feedback_form", clear_on_submit=True):
             user_name = st.text_input("Your Name / Alias:", placeholder="e.g., Anonymous Trader")
             feedback_text = st.text_area("Your Feedback / Feature Request:", placeholder="Write your thoughts or suggestion here...")
-            submit_btn = st.form_submit_submit("Submit Feedback")
+            submit_btn = st.form_submit_button("Submit Feedback")
             
             if submit_btn:
                 if feedback_text.strip() != "":
