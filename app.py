@@ -42,6 +42,9 @@ ticker = st.sidebar.text_input("Enter Ticker (e.g., BTC-USD, EURUSD=X, AAPL):", 
 timeframe = st.sidebar.selectbox("Select Timeframe:", ["1d", "4h", "2h", "1h", "30m", "15m", "5m"])
 period = st.sidebar.selectbox("Select Period (Data Range):", ["1y", "6mo", "3mo", "1mo", "7d", "1d"])
 
+# Global Leverage from Sidebar
+leverage = st.sidebar.slider("Global Leverage (x)", 1, 125, 10, step=1)
+
 @st.cache_data
 def load_data(symbol, p, tf):
     df = yf.download(symbol, period=p, interval=tf)
@@ -95,6 +98,7 @@ try:
         
         trade_table_data = [] 
         
+        # Helper inside the loop to store raw data for later table generation
         def append_signal_raw(stype, date, entry, sl, tp, side):
             trade_table_data.append({
                 "Type": stype, "Signal Date": date, "Entry": round(entry, 2),
@@ -247,16 +251,15 @@ try:
         # --- 7. EDITABLE SIGNAL TABLE WITH DYNAMIC INLINE CALCULATION ---
         st.markdown("---")
         st.write("### 📊 Live Actionable Signals & Custom Risk Matrix Editor")
-        st.info("💡 **How to use**: Double-click on any cell in **'Account Balance ($)'**, **'Risk (%)'**, or **'Leverage'** columns to input your desired values, then press **Enter**. The execution outputs will calculate instantly!")
+        st.info("💡 **How to use**: Double-click on any cell in **'Account Balance ($)'** or **'Risk (%)'** columns to input your desired values, then press **Enter**. The Position Size, Margin, and Profit/Loss outputs will calculate instantly!")
         
         if trade_table_data:
             df_base = pd.DataFrame(trade_table_data).drop_duplicates(subset=["Type", "Entry"]).sort_values(by="Signal Date", ascending=False)
             
-            # Initialize Session State to track updates dynamically
+            # Initialize Session State to remember changes made by trader
             if "df_editable" not in st.session_state or st.session_state.get("current_ticker") != ticker:
-                df_base["Account Balance ($)"] = 1000.0   # Default editable account balance
+                df_base["Account Balance ($)"] = 1000.0   # Default editable balance
                 df_base["Risk (%)"] = 1.0                # Default editable risk
-                df_base["Leverage"] = 10                  # Default editable leverage added directly to rows
                 st.session_state.df_editable = df_base.copy()
                 st.session_state.current_ticker = ticker
             
@@ -266,13 +269,13 @@ try:
                 hide_index=True,
                 use_container_width=True,
                 disabled=["Type", "Signal Date", "Entry", "Stop Loss (SL)", "Take Profit (TP)", "Side"], 
-                column_order=["Type", "Signal Date", "Entry", "Stop Loss (SL)", "Take Profit (TP)", "Account Balance ($)", "Risk (%)", "Leverage"]
+                column_order=["Type", "Signal Date", "Entry", "Stop Loss (SL)", "Take Profit (TP)", "Account Balance ($)", "Risk (%)"]
             )
             
-            # Keep changes retained
+            # Save changes back to session state
             st.session_state.df_editable = edited_df
 
-            # Recalculate execution outputs utilizing the row-specific leverage
+            # Recalculate mathematical risk metrics dynamically based on current state values
             computed_rows = []
             for _, row in edited_df.iterrows():
                 entry = row["Entry"]
@@ -280,7 +283,6 @@ try:
                 tp = row["Take Profit (TP)"]
                 bal = row["Account Balance ($)"]
                 r_pct = row["Risk (%)"]
-                lev = int(row["Leverage"]) if row["Leverage"] >= 1 else 1
                 
                 allowed_risk_usd = bal * (r_pct / 100.0)
                 price_diff_sl = abs(entry - sl)
@@ -289,7 +291,7 @@ try:
                 if price_diff_sl > 0:
                     position_size = allowed_risk_usd / price_diff_sl
                     total_position_value = position_size * entry
-                    margin_required = total_position_value / lev
+                    margin_required = total_position_value / leverage
                     expected_loss = price_diff_sl * position_size
                     expected_profit = price_diff_tp * position_size
                 else:
@@ -305,7 +307,7 @@ try:
                 
             df_final_display = pd.DataFrame(computed_rows)
             
-            # Display Matrix Outputs
+            # Sub-table showing computed execution bounds
             st.markdown("#### 🎯 Execution Plan Outputs (Calculated Live)")
             st.dataframe(
                 df_final_display,
@@ -320,18 +322,18 @@ try:
         st.markdown("---")
         st.write("### 💬 Trader Feedback & Suggestions Hub")
         
-        # Initialize feedback structural state
+        # Initialize feedback storage in session state
         if "trader_feedbacks" not in st.session_state:
             st.session_state.trader_feedbacks = [
                 {"User": "AlphaTrader", "Feedback": "The live position size updater inside the table is incredibly fast. Love it!"},
                 {"User": "CryptoWhale", "Feedback": "Can you add an option for Trailing Stop Losses next?"}
             ]
         
-        # Fixed Form for feedback processing with standard submission button
+        # Form for feedback submission
         with st.form("feedback_form", clear_on_submit=True):
             user_name = st.text_input("Your Name / Alias:", placeholder="e.g., Anonymous Trader")
             feedback_text = st.text_area("Your Feedback / Feature Request:", placeholder="Write your thoughts or suggestion here...")
-            submit_btn = st.form_submit_button("Submit Feedback")
+            submit_btn = st.form_submit_submit("Submit Feedback")
             
             if submit_btn:
                 if feedback_text.strip() != "":
@@ -341,7 +343,7 @@ try:
                 else:
                     st.warning("Please write something before submitting.")
         
-        # Render community updates
+        # Display submitted feedbacks
         st.markdown("#### Recent Community Feedback")
         for fb in st.session_state.trader_feedbacks:
             st.markdown(f"> **👤 {fb['User']}:** {fb['Feedback']}")
