@@ -63,36 +63,30 @@ try:
         low_prices = data['Low'].values
         open_prices = data['Open'].values
         
-        # --- DYNAMIC ORDER BLOCK CONTROLS ---
+        # --- DYNAMIC CONTROLS ---
         st.sidebar.markdown("---")
         st.sidebar.subheader("🎛️ Custom Settings")
         ob_distance = st.sidebar.slider("Pattern Detection Distance (Candles)", 3, 20, 7)
         ob_sensitivity = st.sidebar.slider("Sensitivity Multiplier", 0.05, 0.50, 0.10, step=0.05)
         ob_length = st.sidebar.slider("Order Block Box Length", 5, 100, 30)
         
-        # --- LIQUIDITY & PATTERN TOGGLES ---
+        # --- DISPLAY TOGGLES ---
         st.sidebar.markdown("---")
         st.sidebar.subheader("🎯 Display Settings")
         liquidity_count = st.sidebar.slider("BSL / SSL Levels to Display", 1, 10, 3)
-        show_patterns = st.sidebar.checkbox("Show Chart Patterns (Double Top, H&S, Wedges)", value=True)
-        show_ob = st.sidebar.checkbox("Show Order Blocks (OB) / POI", value=True)
-        show_structure = st.sidebar.checkbox("Show BOS & Liquidity Sweeps", value=True)
-        show_ict_metrics = st.sidebar.checkbox("Show MSS, BSL, SSL & BPR", value=True)
+        show_patterns = st.sidebar.checkbox("Show Chart Patterns", value=True)
+        show_ob = st.sidebar.checkbox("Show Order Blocks & FVGs", value=True)
+        show_structure = st.sidebar.checkbox("Show BOS / CHoCH", value=True)
+        show_ict_metrics = st.sidebar.checkbox("Show MSS, BSL, SSL", value=True)
         
-        # --- COLOR CUSTOMIZATION ---
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("🎨 Colors")
-        bull_body_color = st.sidebar.color_picker("Bullish Candle", "#089981")
-        bear_body_color = st.sidebar.color_picker("Bearish Candle", "#f23645")
-        bull_ob_color = st.sidebar.color_picker("Bullish OB Box", "#089981")
-        bear_ob_color = st.sidebar.color_picker("Bearish OB Box", "#f23645")
-        ob_opacity = st.sidebar.slider("OB Box Opacity", 0.01, 0.30, 0.05, step=0.01)
+        # Colors
+        bull_body_color = "#089981"
+        bear_body_color = "#f23645"
         
-        # High-precision Peak and Trough Detection for Patterns
+        # High-precision Peak and Trough Detection
         peaks, _ = find_peaks(high_prices, distance=ob_distance, prominence=np.std(high_prices) * ob_sensitivity)
         troughs, _ = find_peaks(-low_prices, distance=ob_distance, prominence=np.std(low_prices) * ob_sensitivity)
         
-        # Candlestick Generation
         fig = go.Figure(data=[go.Candlestick(
             x=data.index, open=data['Open'], high=data['High'], low=data['Low'], close=data['Close'],
             increasing_fillcolor=bull_body_color, increasing_line_color=bull_body_color,
@@ -100,33 +94,46 @@ try:
             name="Candlesticks"
         )])
         
-        trade_table_data = []
+        trade_table_data = [] # මෙතන තමයි සේරම Table Signals එකතු වෙන්නේ
         
-        # --- 1. LIQUIDITY SWEEP & BOS ENGINE ---
+        # --- 1. BOS & CHoCH (STRUCTURE) ENGINE ---
         last_high = high_prices[peaks[-1]] if len(peaks) > 0 else max(high_prices)
         last_low = low_prices[troughs[-1]] if len(troughs) > 0 else min(low_prices)
-        
+        structure_state = "IDLE" 
+
         if show_structure:
             for idx in range(20, len(data)):
-                if high_prices[idx] > last_high and close_prices[idx] < last_high:
-                    fig.add_annotation(x=data.index[idx], y=high_prices[idx], text="✖️ LQ SWEEP", showarrow=True, arrowhead=2, arrowcolor="#ffcc00", font=dict(color="#000000", size=9, family="Arial Black"), bgcolor="#ffcc00", ay=-35)
-                elif low_prices[idx] < last_low and close_prices[idx] > last_low:
-                    fig.add_annotation(x=data.index[idx], y=low_prices[idx], text="✖️ LQ SWEEP", showarrow=True, arrowhead=2, arrowcolor="#ffcc00", font=dict(color="#000000", size=9, family="Arial Black"), bgcolor="#ffcc00", ay=35)
+                # CHoCH (Change of Character) - පළමු වරට ව්‍යුහය මාරු වීම
+                if close_prices[idx] > last_high and structure_state == "BEAR":
+                    fig.add_annotation(x=data.index[idx], y=high_prices[idx], text="🔄 CHoCH (Bullish)", showarrow=True, arrowcolor="#00ffcc", font=dict(color="#00ffcc", size=9, family="Arial Black"), bgcolor="rgba(11,14,20,0.9)", ay=-30)
+                    structure_state = "BULL"
+                elif close_prices[idx] < last_low and structure_state == "BULL":
+                    fig.add_annotation(x=data.index[idx], y=low_prices[idx], text="🔄 CHoCH (Bearish)", showarrow=True, arrowcolor="#ff3344", font=dict(color="#ff3344", size=9, family="Arial Black"), bgcolor="rgba(11,14,20,0.9)", ay=30)
+                    structure_state = "BEAR"
                 
+                # BOS (Break of Structure) - Trend එක දිගේම දිගටම බිඳගෙන යාම
                 if close_prices[idx] > last_high:
+                    fig.add_shape(type="line", x0=data.index[idx-4], y0=last_high, x1=data.index[idx], y1=last_high, line=dict(color="#089981", width=1.5, dash="dot"))
+                    fig.add_annotation(x=data.index[idx], y=last_high, text="BOS", showarrow=False, font=dict(color="#089981", size=8))
                     last_high = high_prices[idx]
+                    if structure_state == "IDLE": structure_state = "BULL"
                 elif close_prices[idx] < last_low:
+                    fig.add_shape(type="line", x0=data.index[idx-4], y0=last_low, x1=data.index[idx], y1=last_low, line=dict(color="#f23645", width=1.5, dash="dot"))
+                    fig.add_annotation(x=data.index[idx], y=last_low, text="BOS", showarrow=False, font=dict(color="#f23645", size=8), yanchor="top")
                     last_low = low_prices[idx]
+                    if structure_state == "IDLE": structure_state = "BEAR"
 
-        # --- 2. ADVANCED ICT METRICS ENGINE (MULTI BSL / SSL & MSS) ---
+        # --- 2. BSL / SSL & MSS ENGINE ---
         if show_ict_metrics:
             display_peaks = peaks[-liquidity_count:] if len(peaks) >= liquidity_count else peaks
             display_troughs = troughs[-liquidity_count:] if len(troughs) >= liquidity_count else troughs
 
             for p_idx in display_peaks:
                 fig.add_shape(type="line", x0=data.index[p_idx], y0=high_prices[p_idx], x1=data.index[-1], y1=high_prices[p_idx], line=dict(color="#00ffcc", width=1.2, dash="dash"))
+                fig.add_annotation(x=data.index[-1], y=high_prices[p_idx], text="BSL", showarrow=False, font=dict(color="#00ffcc", size=8), xanchor="right")
             for t_idx in display_troughs:
                 fig.add_shape(type="line", x0=data.index[t_idx], y0=low_prices[t_idx], x1=data.index[-1], y1=low_prices[t_idx], line=dict(color="#ff33aa", width=1.2, dash="dash"))
+                fig.add_annotation(x=data.index[-1], y=low_prices[t_idx], text="SSL", showarrow=False, font=dict(color="#ff33aa", size=8), xanchor="right", yanchor="top")
 
             # Filtered MSS
             recent_highs = [high_prices[p] for p in peaks if p < len(data)]
@@ -134,103 +141,85 @@ try:
             for idx in range(ob_distance, len(data)):
                 if len(recent_highs) > 0 and close_prices[idx] > recent_highs[-1] and close_prices[idx-1] <= recent_highs[-1]:
                     fig.add_annotation(x=data.index[idx], y=high_prices[idx], text="⚡ MSS (Bullish)", showarrow=True, arrowhead=1, arrowcolor="#00ffcc", font=dict(color="#00ffcc", size=9, family="Arial Black"), bgcolor="rgba(11, 14, 20, 0.9)", ay=-45)
+                    trade_table_data.append({"Type": "⚡ BULLISH MSS", "Signal Date": data.index[idx].strftime('%Y-%m-%d %H:%M'), "Price / Level": round(high_prices[idx], 2), "Action / Target": "Look for Buy Setup (🎯 Next BSL)", "Status": "Active Structure Shift"})
                     recent_highs.append(high_prices[idx])
                 elif len(recent_lows) > 0 and close_prices[idx] < recent_lows[-1] and close_prices[idx-1] >= recent_lows[-1]:
                     fig.add_annotation(x=data.index[idx], y=low_prices[idx], text="⚡ MSS (Bearish)", showarrow=True, arrowhead=1, arrowcolor="#ff3344", font=dict(color="#ff3344", size=9, family="Arial Black"), bgcolor="rgba(11, 14, 20, 0.9)", ay=45)
+                    trade_table_data.append({"Type": "⚡ BEARISH MSS", "Signal Date": data.index[idx].strftime('%Y-%m-%d %H:%M'), "Price / Level": round(low_prices[idx], 2), "Action / Target": "Look for Sell Setup (🎯 Next SSL)", "Status": "Active Structure Shift"})
                     recent_lows.append(low_prices[idx])
 
-        # --- 3. CLASSIC AUTOMATED CHART PATTERNS ENGINE ---
-        if show_patterns:
-            # Look at the last 5 peaks and troughs to form reliable geometric structures
-            if len(peaks) >= 3 and len(troughs) >= 2:
-                # --- DOUBLE TOP DETECTION ---
-                p1, p2 = peaks[-2], peaks[-1]
-                if abs(high_prices[p1] - high_prices[p2]) / high_prices[p1] < 0.015:
-                    fig.add_shape(type="line", x0=data.index[p1], y0=high_prices[p1], x1=data.index[p2], y1=high_prices[p2], line=dict(color="#ffaa00", width=3))
-                    fig.add_annotation(x=data.index[p2], y=high_prices[p2], text="⚠️ DOUBLE TOP", showarrow=True, arrowcolor="#ffaa00", font=dict(color="#ffaa00", size=10, family="Arial Black"), ay=-50)
+        # --- 3. VALID FVG (FAIR VALUE GAP) DETECTION ---
+        if show_ob:
+            for i in range(2, len(data)):
+                # Bullish FVG (Candle 1 High < Candle 3 Low)
+                if low_prices[i] > high_prices[i-2] and (close_prices[i-1] > open_prices[i-1]):
+                    fvg_top = low_prices[i]
+                    fvg_bottom = high_prices[i-2]
+                    # Check if FVG is unmitigated yet
+                    if min(low_prices[i-1:]) >= fvg_bottom:
+                        fig.add_shape(type="rect", x0=data.index[i-2], y0=fvg_bottom, x1=data.index[-1], y1=fvg_top, fillcolor="rgba(0, 255, 204, 0.03)", line=dict(color="rgba(0, 255, 204, 0.15)", width=1))
+                        trade_table_data.append({"Type": "🟢 UNMITIGATED FVG (Bullish)", "Signal Date": data.index[i-1].strftime('%Y-%m-%d %H:%M'), "Price / Level": f"{round(fvg_bottom,2)} - {round(fvg_top,2)}", "Action / Target": "Buy Entry Zone", "Status": "Pending Mitigation"})
 
-                # --- HEAD AND SHOULDERS (H&S) DETECTION ---
-                if len(peaks) >= 3:
-                    l_sh, head, r_sh = peaks[-3], peaks[-2], peaks[-1]
-                    if high_prices[head] > high_prices[l_sh] and high_prices[head] > high_prices[r_sh]:
-                        if abs(high_prices[l_sh] - high_prices[r_sh]) / high_prices[l_sh] < 0.03:
-                            # Draw Head & Shoulders lines
-                            fig.add_shape(type="line", x0=data.index[l_sh], y0=high_prices[l_sh], x1=data.index[head], y1=high_prices[head], line=dict(color="#ff3333", width=2.5))
-                            fig.add_shape(type="line", x0=data.index[head], y0=high_prices[head], x1=data.index[r_sh], y1=high_prices[r_sh], line=dict(color="#ff3333", width=2.5))
-                            fig.add_annotation(x=data.index[head], y=high_prices[head], text="👤 HEAD & SHOULDERS", showarrow=True, arrowcolor="#ff3333", font=dict(color="#ff3333", size=10, family="Arial Black"), ay=-55)
+                # Bearish FVG (Candle 1 Low > Candle 3 High)
+                elif high_prices[i] < low_prices[i-2] and (close_prices[i-1] < open_prices[i-1]):
+                    fvg_top = low_prices[i-2]
+                    fvg_bottom = high_prices[i]
+                    if max(high_prices[i-1:]) <= fvg_top:
+                        fig.add_shape(type="rect", x0=data.index[i-2], y0=fvg_bottom, x1=data.index[-1], y1=fvg_top, fillcolor="rgba(255, 51, 68, 0.03)", line=dict(color="rgba(255, 51, 68, 0.15)", width=1))
+                        trade_table_data.append({"Type": "🔴 UNMITIGATED FVG (Bearish)", "Signal Date": data.index[i-1].strftime('%Y-%m-%d %H:%M'), "Price / Level": f"{round(fvg_bottom,2)} - {round(fvg_top,2)}", "Action / Target": "Sell Entry Zone", "Status": "Pending Mitigation"})
 
-            if len(troughs) >= 3 and len(peaks) >= 2:
-                # --- DOUBLE BOTTOM DETECTION ---
-                t1, t2 = troughs[-2], troughs[-1]
-                if abs(low_prices[t1] - low_prices[t2]) / low_prices[t1] < 0.015:
-                    fig.add_shape(type="line", x0=data.index[t1], y0=low_prices[t1], x1=data.index[t2], y1=low_prices[t2], line=dict(color="#00aaff", width=3))
-                    fig.add_annotation(x=data.index[t2], y=low_prices[t2], text="⚠️ DOUBLE BOTTOM", showarrow=True, arrowcolor="#00aaff", font=dict(color="#00aaff", size=10, family="Arial Black"), ay=50)
-
-                # --- INVERTED HEAD AND SHOULDERS DETECTION ---
-                l_sh_inv, head_inv, r_sh_inv = troughs[-3], troughs[-2], troughs[-1]
-                if low_prices[head_inv] < low_prices[l_sh_inv] and low_prices[head_inv] < low_prices[r_sh_inv]:
-                    if abs(low_prices[l_sh_inv] - low_prices[r_sh_inv]) / low_prices[l_sh_inv] < 0.03:
-                        fig.add_shape(type="line", x0=data.index[l_sh_inv], y0=low_prices[l_sh_inv], x1=data.index[head_inv], y1=low_prices[head_inv], line=dict(color="#33cc33", width=2.5))
-                        fig.add_shape(type="line", x0=data.index[head_inv], y0=low_prices[head_inv], x1=data.index[r_sh_inv], y1=low_prices[r_sh_inv], line=dict(color="#33cc33", width=2.5))
-                        fig.add_annotation(x=data.index[head_inv], y=low_prices[head_inv], text="🙃 INVERTED H&S", showarrow=True, arrowcolor="#33cc33", font=dict(color="#33cc33", size=10, family="Arial Black"), ay=55)
-
-            # --- WEDGES DETECTION (RISING & FALLING WEDGE) ---
-            if len(peaks) >= 3 and len(troughs) >= 3:
-                p_nodes = peaks[-3:]
-                t_nodes = troughs[-3:]
-                
-                # Slopes calculation using simple linear regression fits
-                slope_peaks = np.polyfit(p_nodes, [high_prices[x] for x in p_nodes], 1)[0]
-                slope_troughs = np.polyfit(t_nodes, [low_prices[x] for x in t_nodes], 1)[0]
-                
-                # Rising Wedge: Both slopes are positive, but support is steeper than resistance (converging)
-                if slope_peaks > 0 and slope_troughs > 0 and slope_troughs > slope_peaks:
-                    fig.add_shape(type="line", x0=data.index[p_nodes[0]], y0=high_prices[p_nodes[0]], x1=data.index[-1], y1=high_prices[p_nodes[-1]], line=dict(color="#e67e22", width=2, dash="dashdot"))
-                    fig.add_shape(type="line", x0=data.index[t_nodes[0]], y0=low_prices[t_nodes[0]], x1=data.index[-1], y1=low_prices[t_nodes[-1]], line=dict(color="#e67e22", width=2, dash="dashdot"))
-                    fig.add_annotation(x=data.index[p_nodes[-1]], y=high_prices[p_nodes[-1]], text="📐 RISING WEDGE", showarrow=False, font=dict(color="#e67e22", size=10, family="Arial Black"), yanchor="bottom")
-                
-                # Falling Wedge: Both slopes are negative, but resistance is steeper than support (converging)
-                elif slope_peaks < 0 and slope_troughs < 0 and slope_peaks < slope_troughs:
-                    fig.add_shape(type="line", x0=data.index[p_nodes[0]], y0=high_prices[p_nodes[0]], x1=data.index[-1], y1=high_prices[p_nodes[-1]], line=dict(color="#9b59b6", width=2, dash="dashdot"))
-                    fig.add_shape(type="line", x0=data.index[t_nodes[0]], y0=low_prices[t_nodes[0]], x1=data.index[-1], y1=low_prices[t_nodes[-1]], line=dict(color="#9b59b6", width=2, dash="dashdot"))
-                    fig.add_annotation(x=data.index[t_nodes[-1]], y=low_prices[t_nodes[-1]], text="📐 FALLING WEDGE", showarrow=False, font=dict(color="#9b59b6", size=10, family="Arial Black"), yanchor="top")
-
-        # --- 4. WHOLE-CHART POI / ORDER BLOCK DETECTION ---
-        def hex_to_rgba(hex_str, opacity):
-            hex_str = hex_str.lstrip('#')
-            lv = len(hex_str)
-            rgb = tuple(int(hex_str[i:i + lv // 3], 16) for i in range(0, lv, lv // 3))
-            return f"rgba({rgb[0]}, {rgb[1]}, {rgb[2]}, {opacity})"
-
+        # --- 4. VALID ORDER BLOCK DETECTION ---
         if show_ob:
             for p in peaks:
                 if p < len(data) - 2:
-                    ob_top = high_prices[p]
-                    ob_bottom = min(open_prices[p], close_prices[p])
-                    future_candles_high = high_prices[p+1:]
-                    if len(future_candles_high) > 0 and max(future_candles_high) < ob_top:
+                    ob_top, ob_bottom = high_prices[p], min(open_prices[p], close_prices[p])
+                    if max(high_prices[p+1:]) < ob_top: # Unmitigated check
                         end_idx = min(p + ob_length, len(data) - 1)
-                        fig.add_shape(type="rect", x0=data.index[p-1], y0=ob_bottom, x1=data.index[end_idx], y1=ob_top, fillcolor=hex_to_rgba(bear_ob_color, ob_opacity), line=dict(color=bear_ob_color, width=1))
+                        fig.add_shape(type="rect", x0=data.index[p-1], y0=ob_bottom, x1=data.index[end_idx], y1=ob_top, fillcolor="rgba(242, 54, 69, 0.05)", line=dict(color="#f23645", width=1))
+                        trade_table_data.append({"Type": "🔴 BEARISH ORDER BLOCK", "Signal Date": data.index[p].strftime('%Y-%m-%d %H:%M'), "Price / Level": round(ob_bottom, 2), "Action / Target": "Premium Sell Entry", "Status": "POI Active"})
                         
             for t in troughs:
                 if t < len(data) - 2:
-                    ob_bottom = low_prices[t]
-                    ob_top = max(open_prices[t], close_prices[t])
-                    future_candles_low = low_prices[t+1:]
-                    if len(future_candles_low) > 0 and min(future_candles_low) > ob_bottom:
+                    ob_bottom, ob_top = low_prices[t], max(open_prices[t], close_prices[t])
+                    if min(low_prices[t+1:]) > ob_bottom:
                         end_idx = min(t + ob_length, len(data) - 1)
-                        fig.add_shape(type="rect", x0=data.index[t-1], y0=ob_bottom, x1=data.index[end_idx], y1=ob_top, fillcolor=hex_to_rgba(bull_ob_color, ob_opacity), line=dict(color=bull_ob_color, width=1))
+                        fig.add_shape(type="rect", x0=data.index[t-1], y0=ob_bottom, x1=data.index[end_idx], y1=ob_top, fillcolor="rgba(8, 153, 129, 0.05)", line=dict(color="#089981", width=1))
+                        trade_table_data.append({"Type": "🟢 BULLISH ORDER BLOCK", "Signal Date": data.index[t].strftime('%Y-%m-%d %H:%M'), "Price / Level": round(ob_top, 2), "Action / Target": "Discount Buy Entry", "Status": "POI Active"})
 
+        # --- 5. CLASSIC CHART PATTERNS ENGINE ---
+        if show_patterns and len(peaks) >= 3 and len(troughs) >= 3:
+            # Double Top
+            if abs(high_prices[peaks[-2]] - high_prices[peaks[-1]]) / high_prices[peaks[-2]] < 0.015:
+                fig.add_shape(type="line", x0=data.index[peaks[-2]], y0=high_prices[peaks[-2]], x1=data.index[peaks[-1]], y1=high_prices[peaks[-1]], line=dict(color="#ffaa00", width=3))
+                trade_table_data.append({"Type": "⚠️ DOUBLE TOP DETECTED", "Signal Date": data.index[peaks[-1]].strftime('%Y-%m-%d'), "Price / Level": round(high_prices[peaks[-1]], 2), "Action / Target": "Reversal / Short Setup", "Status": "Pattern Formed"})
+            # Double Bottom
+            if abs(low_prices[troughs[-2]] - low_prices[troughs[-1]]) / low_prices[troughs[-2]] < 0.015:
+                fig.add_shape(type="line", x0=data.index[troughs[-2]], y0=low_prices[troughs[-2]], x1=data.index[troughs[-1]], y1=low_prices[troughs[-1]], line=dict(color="#00aaff", width=3))
+                trade_table_data.append({"Type": "⚠️ DOUBLE BOTTOM DETECTED", "Signal Date": data.index[troughs[-1]].strftime('%Y-%m-%d'), "Price / Level": round(low_prices[troughs[-1]], 2), "Action / Target": "Reversal / Long Setup", "Status": "Pattern Formed"})
+
+        # Layout & Display Chart
         fig.update_layout(
-            title=f"{ticker} Live Chart | Premium ICT/SMC & Pattern Engine",
+            title=f"{ticker} Live Chart | Premium Multi-Forecast Smart Tool",
             xaxis_title="Date/Time", template="plotly_dark",
             paper_bgcolor='#0b0e14', plot_bgcolor='#0b0e14',
-            xaxis_rangeslider_visible=False, height=780, font=dict(color="#8a99ad"),
+            xaxis_rangeslider_visible=False, height=750, font=dict(color="#8a99ad"),
             margin=dict(t=30, b=10, l=10, r=50),
-            yaxis=dict(title="Price", side="right", showgrid=True, gridcolor="rgba(42, 46, 57, 0.4)", ticks="outside"),
-            xaxis=dict(showgrid=True, gridcolor="rgba(42, 46, 57, 0.4)")
+            yaxis=dict(title="Price", side="right", showgrid=True, gridcolor="rgba(42, 46, 57, 0.4)", ticks="outside")
         )
         st.plotly_chart(fig, use_container_width=True)
+
+        # --- 6. DYNAMIC SIGNAL TABLE (THE SOLUTION) ---
+        st.markdown("---")
+        st.write("### 📊 Active Trading Signals & Institutional POIs Matrix")
+        
+        if trade_table_data:
+            df_signals = pd.DataFrame(trade_table_data)
+            # Sort by date to show latest signals first
+            df_signals = df_signals.drop_duplicates(subset=["Type", "Price / Level"]).sort_values(by="Signal Date", ascending=False)
+            st.dataframe(df_signals, use_container_width=True, hide_index=True)
+            st.success(f"🔥 Analysis Complete. {len(df_signals)} Valid High-Probability Action Zones/Patterns identified successfully.")
+        else:
+            st.info("⏳ Scanning Chart... No strong unmitigated FVG, Order Blocks, or Geometric Patterns forming right now.")
 
 except Exception as e:
     st.error(f"Something went wrong: {e}")
