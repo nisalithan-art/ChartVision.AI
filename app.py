@@ -68,15 +68,12 @@ try:
         st.sidebar.subheader("🎛️ Custom Order Block Settings")
         ob_distance = st.sidebar.slider("OB Detection Range (Candle Distance)", 3, 20, 10)
         ob_sensitivity = st.sidebar.slider("OB Sensitivity Multiplier", 0.05, 0.50, 0.15, step=0.05)
-        
-        # --- NEW DYNAMIC OB LENGTH CONTROL ---
         ob_length = st.sidebar.slider("Order Block Box Length (Candles to extend)", 5, 100, 30)
         
-        # --- NEW COLOR CUSTOMIZATION CONTROLS ---
+        # --- COLOR CUSTOMIZATION CONTROLS ---
         st.sidebar.markdown("---")
         st.sidebar.subheader("🎨 Customize Chart & Box Colors")
         
-        # Candlestick Body & Border Colors Separately
         st.sidebar.markdown("**🟢 Bullish Candle Settings**")
         bull_body_color = st.sidebar.color_picker("Bullish Body Color", "#089981")
         bull_border_color = st.sidebar.color_picker("Bullish Border & Wick Color", "#089981")
@@ -85,22 +82,23 @@ try:
         bear_body_color = st.sidebar.color_picker("Bearish Body Color", "#f23645")
         bear_border_color = st.sidebar.color_picker("Bearish Border & Wick Color", "#f23645")
         
-        # Order Block Box Colors
         st.sidebar.markdown("**📦 Order Block (OB) Box Colors**")
         bull_ob_color = st.sidebar.color_picker("Bullish OB Box Color", "#089981")
         bear_ob_color = st.sidebar.color_picker("Bearish OB Box Color", "#f23645")
         ob_opacity = st.sidebar.slider("OB Box Opacity", 0.01, 0.30, 0.05, step=0.01)
         
+        # --- ICT DISPLAY SETTINGS ---
         st.sidebar.markdown("---")
-        st.sidebar.subheader("🛠️ Display Settings")
-        show_ob = st.sidebar.checkbox("Show Order Blocks (OB)", value=True)
+        st.sidebar.subheader("⚡ ICT & SMC Premium Features")
+        show_ob = st.sidebar.checkbox("Show Order Blocks (OB) / POI", value=True)
         show_structure = st.sidebar.checkbox("Show BOS & Liquidity Sweeps", value=True)
+        show_ict_metrics = st.sidebar.checkbox("Show MSS, BSL, SSL & BPR", value=True)
         
         # High-precision Peak and Trough Detection
         peaks, _ = find_peaks(high_prices, distance=ob_distance, prominence=np.std(high_prices) * ob_sensitivity)
         troughs, _ = find_peaks(-low_prices, distance=ob_distance, prominence=np.std(low_prices) * ob_sensitivity)
         
-        # Candlestick Generation with Separate Body and Border/Wick Colors
+        # Candlestick Generation
         fig = go.Figure(data=[go.Candlestick(
             x=data.index,
             open=data['Open'],
@@ -108,20 +106,21 @@ try:
             low=data['Low'],
             close=data['Close'],
             increasing_fillcolor=bull_body_color,
-            increasing_line_color=bull_border_color, # Border සහ Wick පාට
+            increasing_line_color=bull_border_color,
             decreasing_fillcolor=bear_body_color,
-            decreasing_line_color=bear_border_color, # Border සහ Wick පාට
+            decreasing_line_color=bear_border_color,
             name="Candlesticks"
         )])
         
         trade_table_data = []
         
-        # --- 1. LIQUIDITY SWEEP ENGINE ---
+        # --- 1. LIQUIDITY SWEEP & BOS ENGINE ---
         last_high = high_prices[peaks[-1]] if len(peaks) > 0 else max(high_prices)
         last_low = low_prices[troughs[-1]] if len(troughs) > 0 else min(low_prices)
         
         if show_structure:
             for idx in range(20, len(data)):
+                # High Liquidity Sweep Detection
                 if high_prices[idx] > last_high and close_prices[idx] < last_high:
                     fig.add_annotation(
                         x=data.index[idx], y=high_prices[idx],
@@ -130,18 +129,15 @@ try:
                         bgcolor="#ffcc00", ay=-35
                     )
                     fig.add_shape(
-                        type="line",
-                        x0=data.index[idx-10 if idx-10 >= 0 else 0], y0=last_high,
-                        x1=data.index[-1], y1=last_high,
-                        line=dict(color="#ffffff", width=2, dash="solid")
+                        type="line", x0=data.index[idx-10 if idx-10 >= 0 else 0], y0=last_high,
+                        x1=data.index[-1], y1=last_high, line=dict(color="#ffffff", width=2, dash="solid")
                     )
                     fig.add_annotation(
-                        x=data.index[-1], y=last_high,
-                        text="LQ SWEEP TRIGGER LEVEL", showarrow=False,
-                        font=dict(color="#ffffff", size=9, family="Arial Black"),
-                        xanchor="right", yanchor="bottom"
+                        x=data.index[-1], y=last_high, text="LQ SWEEP TRIGGER LEVEL", showarrow=False,
+                        font=dict(color="#ffffff", size=9, family="Arial Black"), xanchor="right", yanchor="bottom"
                     )
                     
+                # Low Liquidity Sweep Detection
                 elif low_prices[idx] < last_low and close_prices[idx] > last_low:
                     fig.add_annotation(
                         x=data.index[idx], y=low_prices[idx],
@@ -150,26 +146,52 @@ try:
                         bgcolor="#ffcc00", ay=35
                     )
                     fig.add_shape(
-                        type="line",
-                        x0=data.index[idx-10 if idx-10 >= 0 else 0], y0=last_low,
-                        x1=data.index[-1], y1=last_low,
-                        line=dict(color="#ffffff", width=2, dash="solid")
+                        type="line", x0=data.index[idx-10 if idx-10 >= 0 else 0], y0=last_low,
+                        x1=data.index[-1], y1=last_low, line=dict(color="#ffffff", width=2, dash="solid")
                     )
                     fig.add_annotation(
-                        x=data.index[-1], y=last_low,
-                        text="LQ SWEEP TRIGGER LEVEL", showarrow=False,
-                        font=dict(color="#ffffff", size=9, family="Arial Black"),
-                        xanchor="right", yanchor="top"
+                        x=data.index[-1], y=last_low, text="LQ SWEEP TRIGGER LEVEL", showarrow=False,
+                        font=dict(color="#ffffff", size=9, family="Arial Black"), xanchor="right", yanchor="top"
                     )
                 
+                # BOS Structure update
                 if close_prices[idx] > last_high:
                     fig.add_shape(type="line", x0=data.index[idx-5], y0=last_high, x1=data.index[idx], y1=last_high, line=dict(color=bull_body_color, width=1.5, dash="dot"))
                     last_high = high_prices[idx]
                 elif close_prices[idx] < last_low:
                     fig.add_shape(type="line", x0=data.index[idx-5], y0=last_low, x1=data.index[idx], y1=last_low, line=dict(color=bear_body_color, width=1.5, dash="dot"))
                     last_low = low_prices[idx]
-                    
-        # --- 2. WHOLE-CHART MULTI ORDER BLOCK DETECTION WITH CUSTOM COLORS ---
+
+        # --- 2. ADVANCED ICT METRICS ENGINE (MSS, BSL, SSL, BPR) ---
+        if show_ict_metrics:
+            # A. BSL & SSL (Major Swing Highs/Lows acting as Liquidity Pools)
+            if len(peaks) > 0:
+                bsl_level = high_prices[peaks[-1]]
+                fig.add_shape(type="line", x0=data.index[peaks[-1]], y0=bsl_level, x1=data.index[-1], y1=bsl_level, line=dict(color="#00ffcc", width=1.5, dash="dash"))
+                fig.add_annotation(x=data.index[-1], y=bsl_level, text="BSL (Buyside Liquidity)", showarrow=False, font=dict(color="#00ffcc", size=9), xanchor="right", yanchor="bottom")
+                
+            if len(troughs) > 0:
+                ssl_level = low_prices[troughs[-1]]
+                fig.add_shape(type="line", x0=data.index[troughs[-1]], y0=ssl_level, x1=data.index[-1], y1=ssl_level, line=dict(color="#ff33aa", width=1.5, dash="dash"))
+                fig.add_annotation(x=data.index[-1], y=ssl_level, text="SSL (Sellside Liquidity)", showarrow=False, font=dict(color="#ff33aa", size=9), xanchor="right", yanchor="top")
+
+            # B. MSS (Market Structure Shift) & BPR (Balanced Price Range) Detection
+            for idx in range(5, len(data) - 1):
+                # MSS Detection (Price breaks previous short-term swing high with strong close)
+                if close_prices[idx] > high_prices[idx-1] and close_prices[idx-1] <= high_prices[idx-2]:
+                    if close_prices[idx] > last_high:
+                        fig.add_annotation(x=data.index[idx], y=high_prices[idx], text="⚡ MSS (Bullish Shift)", showarrow=True, arrowhead=1, arrowcolor="#00ffcc", font=dict(color="#00ffcc", size=9, family="Arial Black"), bgcolor="rgba(11, 14, 20, 0.8)", ay=-40)
+                
+                # BPR (Balanced Price Range - Overlapping aggressive buying & selling wicks/bodies)
+                if idx < len(data) - 2:
+                    # Bullish BPR Zone
+                    if low_prices[idx] > high_prices[idx+2] and high_prices[idx+1] < low_prices[idx]:
+                        bpr_top = low_prices[idx]
+                        bpr_bottom = high_prices[idx+2]
+                        fig.add_shape(type="rect", x0=data.index[idx], y0=bpr_bottom, x1=data.index[-1], y1=bpr_top, fillcolor="rgba(255, 165, 0, 0.03)", line=dict(color="rgba(255, 165, 0, 0.2)", width=1, dash="dot"))
+                        fig.add_annotation(x=data.index[-1], y=bpr_top, text="BPR Zone", showarrow=False, font=dict(color="orange", size=8), xanchor="right")
+
+        # --- 3. WHOLE-CHART POI / ORDER BLOCK DETECTION ---
         def hex_to_rgba(hex_str, opacity):
             hex_str = hex_str.lstrip('#')
             lv = len(hex_str)
@@ -177,23 +199,22 @@ try:
             return f"rgba({rgb[0]}, {rgb[1]}, {rgb[2]}, {opacity})"
 
         if show_ob:
-            # Bearish OB Boxes
+            # Bearish OB (POI Short)
             for p in peaks:
                 if p < len(data) - 2:
                     ob_top = high_prices[p]
                     ob_bottom = min(open_prices[p], close_prices[p])
                     future_candles_high = high_prices[p+1:]
                     if len(future_candles_high) > 0 and max(future_candles_high) < ob_top:
-                        # Sidebar එකෙන් දෙන දිග ප්‍රමාණය අනුව Box එක අවසන් වන තැන තීරණය කිරීම
                         end_idx = min(p + ob_length, len(data) - 1)
                         fig.add_shape(
                             type="rect", x0=data.index[p-1], y0=ob_bottom, x1=data.index[end_idx], y1=ob_top,
-                            fillcolor=hex_to_rgba(bear_ob_color, ob_opacity),
-                            line=dict(color=bear_ob_color, width=1)
+                            fillcolor=hex_to_rgba(bear_ob_color, ob_opacity), line=dict(color=bear_ob_color, width=1)
                         )
+                        fig.add_annotation(x=data.index[p], y=ob_top, text="POI (Bearish OB)", showarrow=False, font=dict(color=bear_ob_color, size=8), yanchor="bottom")
                         
                         trade_table_data.append({
-                            "Type": "🔴 BEARISH OB (Short Limit)",
+                            "Type": "🔴 POI / BEARISH OB",
                             "OB Zone (Top)": round(ob_top, 2),
                             "Entry / OB Bottom": round(ob_bottom, 2),
                             "Stop Loss (SL)": round(ob_top + (ob_top - ob_bottom) * 0.15, 2),
@@ -202,7 +223,7 @@ try:
                             "OB Formed Date": data.index[p].strftime('%Y-%m-%d %H:%M')
                         })
                         
-            # Bullish OB Boxes
+            # Bullish OB (POI Long)
             for t in troughs:
                 if t < len(data) - 2:
                     ob_bottom = low_prices[t]
@@ -212,12 +233,12 @@ try:
                         end_idx = min(t + ob_length, len(data) - 1)
                         fig.add_shape(
                             type="rect", x0=data.index[t-1], y0=ob_bottom, x1=data.index[end_idx], y1=ob_top,
-                            fillcolor=hex_to_rgba(bull_ob_color, ob_opacity),
-                            line=dict(color=bull_ob_color, width=1)
+                            fillcolor=hex_to_rgba(bull_ob_color, ob_opacity), line=dict(color=bull_ob_color, width=1)
                         )
+                        fig.add_annotation(x=data.index[t], y=ob_bottom, text="POI (Bullish OB)", showarrow=False, font=dict(color=bull_ob_color, size=8), yanchor="top")
                         
                         trade_table_data.append({
-                            "Type": "🟢 BULLISH OB (Long Limit)",
+                            "Type": "🟢 POI / BULLISH OB",
                             "OB Zone (Top)": round(ob_top, 2),
                             "Entry / OB Bottom": round(ob_bottom, 2),
                             "Stop Loss (SL)": round(ob_bottom - (ob_top - ob_bottom) * 0.15, 2),
@@ -227,40 +248,29 @@ try:
                         })
                         
         fig.update_layout(
-            title=f"{ticker} Live Chart | Whole-Chart SMC Analytics Engine",
-            xaxis_title="Date/Time",
-            template="plotly_dark",
-            paper_bgcolor='#0b0e14',
-            plot_bgcolor='#0b0e14',
-            xaxis_rangeslider_visible=False,
-            height=780,  
-            font=dict(color="#8a99ad"),
+            title=f"{ticker} Live Chart | Premium ICT/SMC Analytics Engine",
+            xaxis_title="Date/Time", template="plotly_dark",
+            paper_bgcolor='#0b0e14', plot_bgcolor='#0b0e14',
+            xaxis_rangeslider_visible=False, height=780, font=dict(color="#8a99ad"),
             margin=dict(t=30, b=10, l=10, r=50),
             
             yaxis=dict(
-                title="Price",
-                side="right",             
-                showgrid=True,
-                gridcolor="rgba(42, 46, 57, 0.4)",
-                ticks="outside",
-                tickfont=dict(color="#8a99ad")
+                title="Price", side="right", showgrid=True,
+                gridcolor="rgba(42, 46, 57, 0.4)", ticks="outside", tickfont=dict(color="#8a99ad")
             ),
-            xaxis=dict(
-                showgrid=True,
-                gridcolor="rgba(42, 46, 57, 0.4)"
-            )
+            xaxis=dict(showgrid=True, gridcolor="rgba(42, 46, 57, 0.4)")
         )
         st.plotly_chart(fig, use_container_width=True)
         
-        # --- 3. ADVANCED SIGNAL TABLE ---
+        # --- 4. ADVANCED SIGNAL TABLE ---
         st.markdown("---")
-        st.write("### 📊 Active Institutional Order Blocks & Pending Setups")
+        st.write("### 📊 Active Institutional POIs & Premium Pending Setups")
         
         if trade_table_data:
             df_signals = pd.DataFrame(trade_table_data)
             df_signals = df_signals[["Type", "OB Formed Date", "OB Zone (Top)", "Entry / OB Bottom", "Stop Loss (SL)", "Take Profit (TP)", "Risk:Reward"]]
             st.dataframe(df_signals, use_container_width=True, hide_index=True)
-            st.success(f"🔥 Chart analysis complete. Successfully identified {len(df_signals)} active (Unmitigated) strong Order Blocks.")
+            st.success(f"🔥 Chart analysis complete. Successfully identified {len(df_signals)} active (Unmitigated) POI Order Blocks.")
         else:
             st.info("⏳ No strong unmitigated Order Blocks found across the chart currently.")
 
