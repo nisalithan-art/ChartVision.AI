@@ -242,7 +242,7 @@ try:
             title=f"{ticker} Live Chart | Multi-Forecast Engine with Inline Matrix Customizer",
             xaxis_title="Date/Time", template="plotly_dark",
             paper_bgcolor='#0b0e14', plot_bgcolor='#0b0e14',
-            xaxis_rangeslider_visible=False, height=650, font=dict(color="#8a99ad"),
+            xaxis_rangeslider_visible=False, height=600, font=dict(color="#8a99ad"),
             margin=dict(t=30, b=10, l=10, r=50),
             yaxis=dict(title="Price", side="right", showgrid=True, gridcolor="rgba(42, 46, 57, 0.4)", ticks="outside")
         )
@@ -251,15 +251,15 @@ try:
         # --- 7. EDITABLE SIGNAL TABLE WITH DYNAMIC INLINE CALCULATION ---
         st.markdown("---")
         st.write("### 📊 Live Actionable Signals & Custom Risk Matrix Editor")
-        st.info("💡 **කොහොමද කරන්නේ?**: පහත Table එකේ තියෙන **'Account Balance ($)'** හෝ **'Risk (%)'** සෛල (Cells) මත Double-Click කරලා ඔයාට කැමති අගයක් ගහලා **Enter** කරන්න. එවිට Position Size, Margin සහ Profit/Loss ඔක්කොම එවලේම වෙනස් වේවි!")
+        st.info("💡 **How to use**: Double-click on any cell in **'Account Balance ($)'** or **'Risk (%)'** columns to input your desired values, then press **Enter**. The Position Size, Margin, and Profit/Loss outputs will calculate instantly!")
         
         if trade_table_data:
             df_base = pd.DataFrame(trade_table_data).drop_duplicates(subset=["Type", "Entry"]).sort_values(by="Signal Date", ascending=False)
             
             # Initialize Session State to remember changes made by trader
             if "df_editable" not in st.session_state or st.session_state.get("current_ticker") != ticker:
-                df_base["Account Balance ($)"] = 1000.0   # Default values editable by user
-                df_base["Risk (%)"] = 1.0                # Default values editable by user
+                df_base["Account Balance ($)"] = 1000.0   # Default editable balance
+                df_base["Risk (%)"] = 1.0                # Default editable risk
                 st.session_state.df_editable = df_base.copy()
                 st.session_state.current_ticker = ticker
             
@@ -268,7 +268,7 @@ try:
                 st.session_state.df_editable,
                 hide_index=True,
                 use_container_width=True,
-                disabled=["Type", "Signal Date", "Entry", "Stop Loss (SL)", "Take Profit (TP)", "Side"], # Don't allow modification of pure targets
+                disabled=["Type", "Signal Date", "Entry", "Stop Loss (SL)", "Take Profit (TP)", "Side"], 
                 column_order=["Type", "Signal Date", "Entry", "Stop Loss (SL)", "Take Profit (TP)", "Account Balance ($)", "Risk (%)"]
             )
             
@@ -283,7 +283,6 @@ try:
                 tp = row["Take Profit (TP)"]
                 bal = row["Account Balance ($)"]
                 r_pct = row["Risk (%)"]
-                side = row["Side"]
                 
                 allowed_risk_usd = bal * (r_pct / 100.0)
                 price_diff_sl = abs(entry - sl)
@@ -300,16 +299,10 @@ try:
                 
                 computed_rows.append({
                     "Type": row["Type"],
-                    "Signal Date": row["Signal Date"],
-                    "Entry": entry,
-                    "SL": sl,
-                    "TP": tp,
-                    "Account Balance ($)": bal,
-                    "Risk (%)": r_pct,
                     "Size (Units)": round(position_size, 4),
-                    "Margin ($)": round(margin_required, 2),
-                    "If Profit ($)": f"+${round(expected_profit, 2)}",
-                    "If Loss ($)": f"-${round(expected_loss, 2)}"
+                    "Margin Required ($)": round(margin_required, 2),
+                    "If Profit (TP Hit)": f"+${round(expected_profit, 2)}",
+                    "If Loss (SL Hit)": f"-${round(expected_loss, 2)}"
                 })
                 
             df_final_display = pd.DataFrame(computed_rows)
@@ -317,13 +310,43 @@ try:
             # Sub-table showing computed execution bounds
             st.markdown("#### 🎯 Execution Plan Outputs (Calculated Live)")
             st.dataframe(
-                df_final_display[["Type", "Size (Units)", "Margin ($)", "If Profit ($)", "If Loss ($)"]],
+                df_final_display,
                 use_container_width=True,
                 hide_index=True
             )
             
         else:
             st.info("⏳ Scanning Matrix... No valid unmitigated entry conditions met on the immediate horizon.")
+
+        # --- 8. USER FEEDBACK SYSTEM ---
+        st.markdown("---")
+        st.write("### 💬 Trader Feedback & Suggestions Hub")
+        
+        # Initialize feedback storage in session state
+        if "trader_feedbacks" not in st.session_state:
+            st.session_state.trader_feedbacks = [
+                {"User": "AlphaTrader", "Feedback": "The live position size updater inside the table is incredibly fast. Love it!"},
+                {"User": "CryptoWhale", "Feedback": "Can you add an option for Trailing Stop Losses next?"}
+            ]
+        
+        # Form for feedback submission
+        with st.form("feedback_form", clear_on_submit=True):
+            user_name = st.text_input("Your Name / Alias:", placeholder="e.g., Anonymous Trader")
+            feedback_text = st.text_area("Your Feedback / Feature Request:", placeholder="Write your thoughts or suggestion here...")
+            submit_btn = st.form_submit_submit("Submit Feedback")
+            
+            if submit_btn:
+                if feedback_text.strip() != "":
+                    display_name = user_name.strip() if user_name.strip() != "" else "Anonymous Trader"
+                    st.session_state.trader_feedbacks.insert(0, {"User": display_name, "Feedback": feedback_text.strip()})
+                    st.success("Thank you! Your feedback has been posted successfully.")
+                else:
+                    st.warning("Please write something before submitting.")
+        
+        # Display submitted feedbacks
+        st.markdown("#### Recent Community Feedback")
+        for fb in st.session_state.trader_feedbacks:
+            st.markdown(f"> **👤 {fb['User']}:** {fb['Feedback']}")
 
 except Exception as e:
     st.error(f"Something went wrong: {e}")
