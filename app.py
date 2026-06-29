@@ -8,11 +8,11 @@ from scipy.signal import find_peaks
 st.set_page_config(page_title="Pro Trader AI-Less Tool", layout="wide")
 
 st.markdown("""
-    <style>
-    .stApp {background-color: #0b0e14; color: #ecf0f1; }
-    h1, h2, h3 {color: #00ffcc !important; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
-    div[data-testid="stMetricValue"] { color: #00ffcc !important; }
-    </style>
+<style>
+.stApp {background-color: #0b0e14; color: #ecf0f1; }
+h1, h2, h3 {color: #00ffcc !important; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+div[data-testid="stMetricValue"] { color: #00ffcc !important; }
+</style>
 """, unsafe_allow_html=True)
 
 st.title("📈 Pro Trader Automated Chart Pattern & S&R Tool")
@@ -60,9 +60,15 @@ try:
         
         # TradingView Color Theme
         fig = go.Figure(data=[go.Candlestick(
-            x=data.index, open=data['Open'], high=data['High'], low=data['Low'], close=data['Close'],
-            increasing_fillcolor='#089981', increasing_line_color='#089981',
-            decreasing_fillcolor='#f23645', decreasing_line_color='#f23645',
+            x=data.index,
+            open=data['Open'],
+            high=data['High'],
+            low=data['Low'],
+            close=data['Close'],
+            increasing_fillcolor='#089981',
+            increasing_line_color='#089981',
+            decreasing_fillcolor='#f23645',
+            decreasing_line_color='#f23645',
             name="Candlesticks"
         )])
         
@@ -75,46 +81,35 @@ try:
         if show_structure:
             for idx in range(20, len(data)):
                 if high_prices[idx] > last_high and close_prices[idx] < last_high:
-                    fig.add_annotation(x=data.index[idx], y=high_prices[idx], text="✖️ LQ SWEEP",
-                                       showarrow=True, arrowhead=2, arrowcolor="#ffcc00", font=dict(color="#ffcc00", size=9),
-                                       bgcolor="rgba(11, 14, 20, 0.85)", ay=-25)
+                    fig.add_annotation(x=data.index[idx], y=high_prices[idx], text="✖️ LQ SWEEP", showarrow=True, arrowhead=2, arrowcolor="#ffcc00", font=dict(color="#ffcc00", size=9), bgcolor="rgba(11, 14, 20, 0.85)", ay=-25)
                 elif low_prices[idx] < last_low and close_prices[idx] > last_low:
-                    fig.add_annotation(x=data.index[idx], y=low_prices[idx], text="✖️ LQ SWEEP",
-                                       showarrow=True, arrowhead=2, arrowcolor="#ffcc00", font=dict(color="#ffcc00", size=9),
-                                       bgcolor="rgba(11, 14, 20, 0.85)", ay=25)
+                    fig.add_annotation(x=data.index[idx], y=low_prices[idx], text="✖️ LQ SWEEP", showarrow=True, arrowhead=2, arrowcolor="#ffcc00", font=dict(color="#ffcc00", size=9), bgcolor="rgba(11, 14, 20, 0.85)", ay=25)
                 
                 if close_prices[idx] > last_high:
-                    fig.add_shape(type="line", x0=data.index[idx-5], y0=last_high, x1=data.index[idx], y1=last_high,
-                                  line=dict(color="#089981", width=1.5, dash="dot"))
+                    fig.add_shape(type="line", x0=data.index[idx-5], y0=last_high, x1=data.index[idx], y1=last_high, line=dict(color="#089981", width=1.5, dash="dot"))
                     last_high = high_prices[idx]
                 elif close_prices[idx] < last_low:
-                    fig.add_shape(type="line", x0=data.index[idx-5], y0=last_low, x1=data.index[idx], y1=last_low,
-                                  line=dict(color="#f23645", width=1.5, dash="dot"))
+                    fig.add_shape(type="line", x0=data.index[idx-5], y0=last_low, x1=data.index[idx], y1=last_low, line=dict(color="#f23645", width=1.5, dash="dot"))
                     last_low = low_prices[idx]
-
+                    
         # --- 2. WHOLE-CHART MULTI ORDER BLOCK DETECTION & FORECASTING ---
         latest_close = close_prices[-1]
         
         if show_ob:
-            # A. BEARISH ORDER BLOCKS (Analyze all detected peaks across the chart)
+            # A. BEARISH ORDER BLOCKS
             for p in peaks:
                 if p < len(data) - 2:
                     ob_top = high_prices[p]
                     ob_bottom = min(open_prices[p], close_prices[p])
                     
-                    # Check if this OB is still UNMITIGATED (Price hasn't broken above it since creation)
                     future_candles_high = high_prices[p+1:]
                     if len(future_candles_high) > 0 and max(future_candles_high) < ob_top:
+                        fig.add_shape(type="rect", x0=data.index[p-1], y0=ob_bottom, x1=data.index[-1], y1=ob_top, fillcolor="rgba(242, 54, 69, 0.05)", line=dict(color="rgba(242, 54, 69, 0.35)", width=1))
                         
-                        # Plot on Chart
-                        fig.add_shape(type="rect", x0=data.index[p-1], y0=ob_bottom, x1=data.index[-1], y1=ob_top,
-                                      fillcolor="rgba(242, 54, 69, 0.05)", line=dict(color="rgba(242, 54, 69, 0.35)", width=1))
-                        
-                        # Generate Limit/Pending Trade Setup
                         entry = round(ob_bottom, 2)
-                        sl = round(ob_top + (ob_top - ob_bottom) * 0.15, 2) # 15% Buffer above OB
+                        sl = round(ob_top + (ob_top - ob_bottom) * 0.15, 2)
                         risk = sl - entry
-                        tp = round(entry - (risk * 3.0), 2) # Target 1:3 RR Matrix
+                        tp = round(entry - (risk * 3.0), 2)
                         
                         trade_table_data.append({
                             "Type": "🔴 BEARISH OB (Short Limit)",
@@ -125,26 +120,21 @@ try:
                             "Risk:Reward": "1 : 3.0",
                             "OB Formed Date": data.index[p].strftime('%Y-%m-%d %H:%M')
                         })
-
-            # B. BULLISH ORDER BLOCKS (Analyze all detected troughs across the chart)
+                        
+            # B. BULLISH ORDER BLOCKS
             for t in troughs:
                 if t < len(data) - 2:
                     ob_bottom = low_prices[t]
                     ob_top = max(open_prices[t], close_prices[t])
                     
-                    # Check if this OB is UNMITIGATED (Price hasn't broken below it since creation)
                     future_candles_low = low_prices[t+1:]
                     if len(future_candles_low) > 0 and min(future_candles_low) > ob_bottom:
+                        fig.add_shape(type="rect", x0=data.index[t-1], y0=ob_bottom, x1=data.index[-1], y1=ob_top, fillcolor="rgba(8, 153, 129, 0.05)", line=dict(color="rgba(8, 153, 129, 0.35)", width=1))
                         
-                        # Plot on Chart
-                        fig.add_shape(type="rect", x0=data.index[t-1], y0=ob_bottom, x1=data.index[-1], y1=ob_top,
-                                      fillcolor="rgba(8, 153, 129, 0.05)", line=dict(color="rgba(8, 153, 129, 0.35)", width=1))
-                        
-                        # Generate Limit/Pending Trade Setup
                         entry = round(ob_top, 2)
-                        sl = round(ob_bottom - (ob_top - ob_bottom) * 0.15, 2) # 15% Buffer below OB
+                        sl = round(ob_bottom - (ob_top - ob_bottom) * 0.15, 2)
                         risk = entry - sl
-                        tp = round(entry + (risk * 3.0), 2) # Target 1:3 RR Matrix
+                        tp = round(entry + (risk * 3.0), 2)
                         
                         trade_table_data.append({
                             "Type": "🟢 BULLISH OB (Long Limit)",
@@ -155,14 +145,18 @@ try:
                             "Risk:Reward": "1 : 3.0",
                             "OB Formed Date": data.index[t].strftime('%Y-%m-%d %H:%M')
                         })
-
+                        
         fig.update_layout(
             title=f"{ticker} Live Chart | Whole-Chart SMC Analytics Engine",
-            yaxis_title="Price", xaxis_title="Date/Time", template="plotly_dark",
-            paper_bgcolor='#0b0e14', plot_bgcolor='#0b0e14', xaxis_rangeslider_visible=False,
-            height=700, font=dict(color="#8a99ad")
+            yaxis_title="Price",
+            xaxis_title="Date/Time",
+            template="plotly_dark",
+            paper_bgcolor='#0b0e14',
+            plot_bgcolor='#0b0e14',
+            xaxis_rangeslider_visible=False,
+            height=700,
+            font=dict(color="#8a99ad")
         )
-        
         st.plotly_chart(fig, use_container_width=True)
         
         # --- 3. ADVANCED SIGNAL TABLE AT THE BOTTOM ---
@@ -171,18 +165,14 @@ try:
         
         if trade_table_data:
             df_signals = pd.DataFrame(trade_table_data)
-            
-            # Re-ordering columns for cleaner look
             df_signals = df_signals[["Type", "OB Formed Date", "OB Zone (Top)", "Entry / OB Bottom", "Stop Loss (SL)", "Take Profit (TP)", "Risk:Reward"]]
+            st.dataframe(df_signals, use_container_width=True, hide_index=True)
             
-            st.dataframe(
-                df_signals, 
-                use_container_width=True,
-                hide_index=True
-            )
-            st.success(f"🔥 මුළු Chart එකම පරීක්ෂා කර සක්‍රීය (Unmitigated) Strong Order Blocks {len(df_signals)} ක් සොයාගෙන ඇත. මිල මෙම කලාප වලට පැමිණි විට ස්වයංක්‍රීයව Setup ක්‍රියාත්මක වේ.")
+            # මෙතන සිංහල පණිවිඩය වෙනුවට English එක ඇතුළත් කර ඇත
+            st.success(f"🔥 Chart analysis complete. Successfully identified {len(df_signals)} active (Unmitigated) strong Order Blocks. Setups will trigger automatically when the price reaches these zones.")
         else:
-            st.info("⏳ දැනට මුළු Chart එකේම ප්‍රබල Unmitigated Order Blocks හමු නොවීය. සයිඩ්බාර් එකෙන් Sensitivity වෙනස් කර බලන්න.")
+            # මෙතනද English පණිවිඩය ඇතුළත් කර ඇත
+            st.info("⏳ No strong unmitigated Order Blocks found across the chart currently. Try adjusting the sensitivity from the sidebar.")
 
 except Exception as e:
     st.error(f"Something went wrong: {e}")
