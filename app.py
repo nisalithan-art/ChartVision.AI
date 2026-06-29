@@ -94,7 +94,7 @@ try:
             name="Candlesticks"
         )])
         
-        trade_table_data = [] # මෙතන තමයි සේරම Table Signals එකතු වෙන්නේ
+        trade_table_data = [] 
         
         # --- 1. BOS & CHoCH (STRUCTURE) ENGINE ---
         last_high = high_prices[peaks[-1]] if len(peaks) > 0 else max(high_prices)
@@ -103,23 +103,25 @@ try:
 
         if show_structure:
             for idx in range(20, len(data)):
-                # CHoCH (Change of Character) - පළමු වරට ව්‍යුහය මාරු වීම
                 if close_prices[idx] > last_high and structure_state == "BEAR":
                     fig.add_annotation(x=data.index[idx], y=high_prices[idx], text="🔄 CHoCH (Bullish)", showarrow=True, arrowcolor="#00ffcc", font=dict(color="#00ffcc", size=9, family="Arial Black"), bgcolor="rgba(11,14,20,0.9)", ay=-30)
+                    sl_val = low_prices[idx-3:idx+1].min()
+                    tp_val = close_prices[idx] + (close_prices[idx] - sl_val) * 2.5
+                    trade_table_data.append({"Type": "🔄 CHoCH (Bullish Shift)", "Signal Date": data.index[idx].strftime('%Y-%m-%d %H:%M'), "Entry / Level": round(close_prices[idx], 2), "Stop Loss (SL)": round(sl_val, 2), "Take Profit (TP)": round(tp_val, 2), "Risk:Reward": "1 : 2.5"})
                     structure_state = "BULL"
                 elif close_prices[idx] < last_low and structure_state == "BULL":
                     fig.add_annotation(x=data.index[idx], y=low_prices[idx], text="🔄 CHoCH (Bearish)", showarrow=True, arrowcolor="#ff3344", font=dict(color="#ff3344", size=9, family="Arial Black"), bgcolor="rgba(11,14,20,0.9)", ay=30)
+                    sl_val = high_prices[idx-3:idx+1].max()
+                    tp_val = close_prices[idx] - (sl_val - close_prices[idx]) * 2.5
+                    trade_table_data.append({"Type": "🔄 CHoCH (Bearish Shift)", "Signal Date": data.index[idx].strftime('%Y-%m-%d %H:%M'), "Entry / Level": round(close_prices[idx], 2), "Stop Loss (SL)": round(sl_val, 2), "Take Profit (TP)": round(tp_val, 2), "Risk:Reward": "1 : 2.5"})
                     structure_state = "BEAR"
                 
-                # BOS (Break of Structure) - Trend එක දිගේම දිගටම බිඳගෙන යාම
                 if close_prices[idx] > last_high:
                     fig.add_shape(type="line", x0=data.index[idx-4], y0=last_high, x1=data.index[idx], y1=last_high, line=dict(color="#089981", width=1.5, dash="dot"))
-                    fig.add_annotation(x=data.index[idx], y=last_high, text="BOS", showarrow=False, font=dict(color="#089981", size=8))
                     last_high = high_prices[idx]
                     if structure_state == "IDLE": structure_state = "BULL"
                 elif close_prices[idx] < last_low:
                     fig.add_shape(type="line", x0=data.index[idx-4], y0=last_low, x1=data.index[idx], y1=last_low, line=dict(color="#f23645", width=1.5, dash="dot"))
-                    fig.add_annotation(x=data.index[idx], y=last_low, text="BOS", showarrow=False, font=dict(color="#f23645", size=8), yanchor="top")
                     last_low = low_prices[idx]
                     if structure_state == "IDLE": structure_state = "BEAR"
 
@@ -130,10 +132,8 @@ try:
 
             for p_idx in display_peaks:
                 fig.add_shape(type="line", x0=data.index[p_idx], y0=high_prices[p_idx], x1=data.index[-1], y1=high_prices[p_idx], line=dict(color="#00ffcc", width=1.2, dash="dash"))
-                fig.add_annotation(x=data.index[-1], y=high_prices[p_idx], text="BSL", showarrow=False, font=dict(color="#00ffcc", size=8), xanchor="right")
             for t_idx in display_troughs:
                 fig.add_shape(type="line", x0=data.index[t_idx], y0=low_prices[t_idx], x1=data.index[-1], y1=low_prices[t_idx], line=dict(color="#ff33aa", width=1.2, dash="dash"))
-                fig.add_annotation(x=data.index[-1], y=low_prices[t_idx], text="SSL", showarrow=False, font=dict(color="#ff33aa", size=8), xanchor="right", yanchor="top")
 
             # Filtered MSS
             recent_highs = [high_prices[p] for p in peaks if p < len(data)]
@@ -141,42 +141,47 @@ try:
             for idx in range(ob_distance, len(data)):
                 if len(recent_highs) > 0 and close_prices[idx] > recent_highs[-1] and close_prices[idx-1] <= recent_highs[-1]:
                     fig.add_annotation(x=data.index[idx], y=high_prices[idx], text="⚡ MSS (Bullish)", showarrow=True, arrowhead=1, arrowcolor="#00ffcc", font=dict(color="#00ffcc", size=9, family="Arial Black"), bgcolor="rgba(11, 14, 20, 0.9)", ay=-45)
-                    trade_table_data.append({"Type": "⚡ BULLISH MSS", "Signal Date": data.index[idx].strftime('%Y-%m-%d %H:%M'), "Price / Level": round(high_prices[idx], 2), "Action / Target": "Look for Buy Setup (🎯 Next BSL)", "Status": "Active Structure Shift"})
+                    sl_val = low_prices[idx-4:idx+1].min()
+                    tp_val = close_prices[idx] + (close_prices[idx] - sl_val) * 3.0
+                    trade_table_data.append({"Type": "⚡ BULLISH MSS", "Signal Date": data.index[idx].strftime('%Y-%m-%d %H:%M'), "Entry / Level": round(close_prices[idx], 2), "Stop Loss (SL)": round(sl_val, 2), "Take Profit (TP)": round(tp_val, 2), "Risk:Reward": "1 : 3.0"})
                     recent_highs.append(high_prices[idx])
                 elif len(recent_lows) > 0 and close_prices[idx] < recent_lows[-1] and close_prices[idx-1] >= recent_lows[-1]:
                     fig.add_annotation(x=data.index[idx], y=low_prices[idx], text="⚡ MSS (Bearish)", showarrow=True, arrowhead=1, arrowcolor="#ff3344", font=dict(color="#ff3344", size=9, family="Arial Black"), bgcolor="rgba(11, 14, 20, 0.9)", ay=45)
-                    trade_table_data.append({"Type": "⚡ BEARISH MSS", "Signal Date": data.index[idx].strftime('%Y-%m-%d %H:%M'), "Price / Level": round(low_prices[idx], 2), "Action / Target": "Look for Sell Setup (🎯 Next SSL)", "Status": "Active Structure Shift"})
+                    sl_val = high_prices[idx-4:idx+1].max()
+                    tp_val = close_prices[idx] - (sl_val - close_prices[idx]) * 3.0
+                    trade_table_data.append({"Type": "⚡ BEARISH MSS", "Signal Date": data.index[idx].strftime('%Y-%m-%d %H:%M'), "Entry / Level": round(close_prices[idx], 2), "Stop Loss (SL)": round(sl_val, 2), "Take Profit (TP)": round(tp_val, 2), "Risk:Reward": "1 : 3.0"})
                     recent_lows.append(low_prices[idx])
 
         # --- 3. VALID FVG (FAIR VALUE GAP) DETECTION ---
         if show_ob:
             for i in range(2, len(data)):
-                # Bullish FVG (Candle 1 High < Candle 3 Low)
                 if low_prices[i] > high_prices[i-2] and (close_prices[i-1] > open_prices[i-1]):
-                    fvg_top = low_prices[i]
-                    fvg_bottom = high_prices[i-2]
-                    # Check if FVG is unmitigated yet
+                    fvg_top, fvg_bottom = low_prices[i], high_prices[i-2]
                     if min(low_prices[i-1:]) >= fvg_bottom:
                         fig.add_shape(type="rect", x0=data.index[i-2], y0=fvg_bottom, x1=data.index[-1], y1=fvg_top, fillcolor="rgba(0, 255, 204, 0.03)", line=dict(color="rgba(0, 255, 204, 0.15)", width=1))
-                        trade_table_data.append({"Type": "🟢 UNMITIGATED FVG (Bullish)", "Signal Date": data.index[i-1].strftime('%Y-%m-%d %H:%M'), "Price / Level": f"{round(fvg_bottom,2)} - {round(fvg_top,2)}", "Action / Target": "Buy Entry Zone", "Status": "Pending Mitigation"})
+                        sl_val = fvg_bottom - (fvg_top - fvg_bottom) * 0.5
+                        tp_val = fvg_top + (fvg_top - sl_val) * 3.0
+                        trade_table_data.append({"Type": "🟢 FVG BUY ZONE", "Signal Date": data.index[i-1].strftime('%Y-%m-%d %H:%M'), "Entry / Level": round(fvg_top, 2), "Stop Loss (SL)": round(sl_val, 2), "Take Profit (TP)": round(tp_val, 2), "Risk:Reward": "1 : 3.0"})
 
-                # Bearish FVG (Candle 1 Low > Candle 3 High)
                 elif high_prices[i] < low_prices[i-2] and (close_prices[i-1] < open_prices[i-1]):
-                    fvg_top = low_prices[i-2]
-                    fvg_bottom = high_prices[i]
+                    fvg_top, fvg_bottom = low_prices[i-2], high_prices[i]
                     if max(high_prices[i-1:]) <= fvg_top:
                         fig.add_shape(type="rect", x0=data.index[i-2], y0=fvg_bottom, x1=data.index[-1], y1=fvg_top, fillcolor="rgba(255, 51, 68, 0.03)", line=dict(color="rgba(255, 51, 68, 0.15)", width=1))
-                        trade_table_data.append({"Type": "🔴 UNMITIGATED FVG (Bearish)", "Signal Date": data.index[i-1].strftime('%Y-%m-%d %H:%M'), "Price / Level": f"{round(fvg_bottom,2)} - {round(fvg_top,2)}", "Action / Target": "Sell Entry Zone", "Status": "Pending Mitigation"})
+                        sl_val = fvg_top + (fvg_top - fvg_bottom) * 0.5
+                        tp_val = fvg_bottom - (sl_val - fvg_bottom) * 3.0
+                        trade_table_data.append({"Type": "🔴 FVG SELL ZONE", "Signal Date": data.index[i-1].strftime('%Y-%m-%d %H:%M'), "Entry / Level": round(fvg_bottom, 2), "Stop Loss (SL)": round(sl_val, 2), "Take Profit (TP)": round(tp_val, 2), "Risk:Reward": "1 : 3.0"})
 
         # --- 4. VALID ORDER BLOCK DETECTION ---
         if show_ob:
             for p in peaks:
                 if p < len(data) - 2:
                     ob_top, ob_bottom = high_prices[p], min(open_prices[p], close_prices[p])
-                    if max(high_prices[p+1:]) < ob_top: # Unmitigated check
+                    if max(high_prices[p+1:]) < ob_top:
                         end_idx = min(p + ob_length, len(data) - 1)
                         fig.add_shape(type="rect", x0=data.index[p-1], y0=ob_bottom, x1=data.index[end_idx], y1=ob_top, fillcolor="rgba(242, 54, 69, 0.05)", line=dict(color="#f23645", width=1))
-                        trade_table_data.append({"Type": "🔴 BEARISH ORDER BLOCK", "Signal Date": data.index[p].strftime('%Y-%m-%d %H:%M'), "Price / Level": round(ob_bottom, 2), "Action / Target": "Premium Sell Entry", "Status": "POI Active"})
+                        sl_val = ob_top + (ob_top - ob_bottom) * 0.15
+                        tp_val = ob_bottom - (sl_val - ob_bottom) * 3.0
+                        trade_table_data.append({"Type": "🔴 BEARISH ORDER BLOCK", "Signal Date": data.index[p].strftime('%Y-%m-%d %H:%M'), "Entry / Level": round(ob_bottom, 2), "Stop Loss (SL)": round(sl_val, 2), "Take Profit (TP)": round(tp_val, 2), "Risk:Reward": "1 : 3.0"})
                         
             for t in troughs:
                 if t < len(data) - 2:
@@ -184,18 +189,26 @@ try:
                     if min(low_prices[t+1:]) > ob_bottom:
                         end_idx = min(t + ob_length, len(data) - 1)
                         fig.add_shape(type="rect", x0=data.index[t-1], y0=ob_bottom, x1=data.index[end_idx], y1=ob_top, fillcolor="rgba(8, 153, 129, 0.05)", line=dict(color="#089981", width=1))
-                        trade_table_data.append({"Type": "🟢 BULLISH ORDER BLOCK", "Signal Date": data.index[t].strftime('%Y-%m-%d %H:%M'), "Price / Level": round(ob_top, 2), "Action / Target": "Discount Buy Entry", "Status": "POI Active"})
+                        sl_val = ob_bottom - (ob_top - ob_bottom) * 0.15
+                        tp_val = ob_top + (ob_top - sl_val) * 3.0
+                        trade_table_data.append({"Type": "🟢 BULLISH ORDER BLOCK", "Signal Date": data.index[t].strftime('%Y-%m-%d %H:%M'), "Entry / Level": round(ob_top, 2), "Stop Loss (SL)": round(sl_val, 2), "Take Profit (TP)": round(tp_val, 2), "Risk:Reward": "1 : 3.0"})
 
         # --- 5. CLASSIC CHART PATTERNS ENGINE ---
         if show_patterns and len(peaks) >= 3 and len(troughs) >= 3:
             # Double Top
             if abs(high_prices[peaks[-2]] - high_prices[peaks[-1]]) / high_prices[peaks[-2]] < 0.015:
                 fig.add_shape(type="line", x0=data.index[peaks[-2]], y0=high_prices[peaks[-2]], x1=data.index[peaks[-1]], y1=high_prices[peaks[-1]], line=dict(color="#ffaa00", width=3))
-                trade_table_data.append({"Type": "⚠️ DOUBLE TOP DETECTED", "Signal Date": data.index[peaks[-1]].strftime('%Y-%m-%d'), "Price / Level": round(high_prices[peaks[-1]], 2), "Action / Target": "Reversal / Short Setup", "Status": "Pattern Formed"})
+                entry_p = high_prices[peaks[-1]]
+                sl_val = entry_p * 1.01
+                tp_val = entry_p - (sl_val - entry_p) * 2.0
+                trade_table_data.append({"Type": "⚠️ DOUBLE TOP REVERSAL", "Signal Date": data.index[peaks[-1]].strftime('%Y-%m-%d'), "Entry / Level": round(entry_p, 2), "Stop Loss (SL)": round(sl_val, 2), "Take Profit (TP)": round(tp_val, 2), "Risk:Reward": "1 : 2.0"})
             # Double Bottom
             if abs(low_prices[troughs[-2]] - low_prices[troughs[-1]]) / low_prices[troughs[-2]] < 0.015:
                 fig.add_shape(type="line", x0=data.index[troughs[-2]], y0=low_prices[troughs[-2]], x1=data.index[troughs[-1]], y1=low_prices[troughs[-1]], line=dict(color="#00aaff", width=3))
-                trade_table_data.append({"Type": "⚠️ DOUBLE BOTTOM DETECTED", "Signal Date": data.index[troughs[-1]].strftime('%Y-%m-%d'), "Price / Level": round(low_prices[troughs[-1]], 2), "Action / Target": "Reversal / Long Setup", "Status": "Pattern Formed"})
+                entry_p = low_prices[troughs[-1]]
+                sl_val = entry_p * 0.99
+                tp_val = entry_p + (entry_p - sl_val) * 2.0
+                trade_table_data.append({"Type": "⚠️ DOUBLE BOTTOM REVERSAL", "Signal Date": data.index[troughs[-1]].strftime('%Y-%m-%d'), "Entry / Level": round(entry_p, 2), "Stop Loss (SL)": round(sl_val, 2), "Take Profit (TP)": round(tp_val, 2), "Risk:Reward": "1 : 2.0"})
 
         # Layout & Display Chart
         fig.update_layout(
@@ -208,18 +221,19 @@ try:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        # --- 6. DYNAMIC SIGNAL TABLE (THE SOLUTION) ---
+        # --- 6. DYNAMIC SIGNAL TABLE WITH SL & TP ---
         st.markdown("---")
-        st.write("### 📊 Active Trading Signals & Institutional POIs Matrix")
+        st.write("### 📊 Premium Institutional Trading Signals Matrix (With SL/TP Targets)")
         
         if trade_table_data:
             df_signals = pd.DataFrame(trade_table_data)
-            # Sort by date to show latest signals first
-            df_signals = df_signals.drop_duplicates(subset=["Type", "Price / Level"]).sort_values(by="Signal Date", ascending=False)
+            # Filter and order columns logically for execution
+            df_signals = df_signals.drop_duplicates(subset=["Type", "Entry / Level"]).sort_values(by="Signal Date", ascending=False)
+            df_signals = df_signals[["Type", "Signal Date", "Entry / Level", "Stop Loss (SL)", "Take Profit (TP)", "Risk:Reward"]]
             st.dataframe(df_signals, use_container_width=True, hide_index=True)
-            st.success(f"🔥 Analysis Complete. {len(df_signals)} Valid High-Probability Action Zones/Patterns identified successfully.")
+            st.success(f"🔥 Live Setup Engine Complete: {len(df_signals)} actionable trading matrices calculated with precise target risk bounds.")
         else:
-            st.info("⏳ Scanning Chart... No strong unmitigated FVG, Order Blocks, or Geometric Patterns forming right now.")
+            st.info("⏳ Scanning Matrix... No valid unmitigated entry conditions met on the immediate horizon.")
 
 except Exception as e:
     st.error(f"Something went wrong: {e}")
