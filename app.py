@@ -66,10 +66,7 @@ footer {visibility: hidden !important;}
 header {visibility: hidden !important;}
 stDecoration {display:none !important;}
 
-/* "Manage app" බොත්තම අඩංගු විය හැකි floating toolbar එක CSS වලින් block කිරීම */
-div[data-testid="stConnectionStatus"] {display: none !important;}
-div[data-testid="stNotification"] {display: none !important;}
-
+/* ප්‍රධාන තේමාව සහ හැඩතල ගැන්වීම් */
 .stApp {background-color: #0b0e14; color: #ecf0f1; }
 h1 {
     color: #00ffcc !important; 
@@ -93,9 +90,9 @@ div[data-testid="stMetricValue"] { color: #00ffcc !important; }
 </style>
 
 <script>
-    // --- 1. MANAGE APP බොත්තම මුලිනුපුටා දැමීමේ JAVASCRIPT කේතය ---
+    // --- 1. MANAGE APP බොත්තම පමණක් ආරක්ෂිතව ඉවත් කිරීමේ JAVASCRIPT කේතය ---
     function removeManageAppButton() {
-        // ක්‍රමය A: තිරයේ ඇති සියලුම බොත්තම් පිරික්සා "Manage app" අඩංගු ඒවා මැකීම
+        // ක්‍රමය A: සියලුම බොත්තම් පරීක්ෂා කර "Manage app" වචනය සහිත බොත්තම පමණක් ඉවත් කිරීම
         const buttons = document.querySelectorAll('button');
         buttons.forEach(btn => {
             if (btn.textContent && (btn.textContent.includes('Manage app') || btn.textContent.includes('Manage'))) {
@@ -103,15 +100,25 @@ div[data-testid="stMetricValue"] { color: #00ffcc !important; }
             }
         });
 
-        // ක්‍රමය B: Streamlit එකෙන් floating toolbar එකට දාන පොදු ක්ලාස් සහ ටැග් අයින් කිරීම
+        // ක්‍රමය B: බොත්තම අඩංගු විය හැකි වෙනත් විශේෂිත බැනර් සහ ටැග් ඉවත් කිරීම
         const viewerBadge = document.querySelector('.stViewerBadge');
         if (viewerBadge) viewerBadge.remove();
         
-        const toolbar = document.querySelector('[data-testid="stStatusWidget"]');
-        if (toolbar) toolbar.remove();
+        // Shadow DOM එකක් ඇතුළත ඇති බොත්තම්ද පිරික්සා ඉවත් කිරීම
+        const hosts = document.querySelectorAll('*');
+        hosts.forEach(host => {
+            if (host.shadowRoot) {
+                const shadowButtons = host.shadowRoot.querySelectorAll('button');
+                shadowButtons.forEach(sBtn => {
+                    if (sBtn.textContent && (sBtn.textContent.includes('Manage app') || sBtn.textContent.includes('Manage'))) {
+                        sBtn.remove();
+                    }
+                });
+            }
+        });
     }
 
-    // පිටුව Load වන විට සහ ඉන්පසු සෑම තත්පරයකටම වරක් බොත්තම තියෙනවාදැයි පරීක්ෂා කර මකා දමයි
+    // පිටුව Load වන විට සහ ඉන්පසු සෑම තත්පරයකටම වරක් පසුබිමෙන් ක්‍රියාත්මක වේ
     document.addEventListener('DOMContentLoaded', removeManageAppButton);
     setInterval(removeManageAppButton, 1000);
 
