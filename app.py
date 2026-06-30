@@ -7,14 +7,24 @@ from scipy.signal import find_peaks
 import sqlite3
 import hashlib
 
-# --- 1. DATABASE SETUP FOR LOGIN SYSTEM ---
+# --- 1. DATABASE SETUP FOR LOGIN & FEEDBACK SYSTEM ---
 def init_db():
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
+    # Users Table
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             email TEXT PRIMARY KEY, 
             password TEXT
+        )
+    ''')
+    # Permanent Feedback Table
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS feedbacks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_name TEXT,
+            feedback_text TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     conn.commit()
@@ -250,7 +260,7 @@ else:
                     "Stop Loss (SL)": float(round(sl, 2)), 
                     "Take Profit (TP)": float(round(tp, 2)),
                     "Side": str(side),
-                    "raw_idx": raw_idx  # සිග්නල් එක වැදුණු නියම ඉටිපන්දමේ Index එක මතක තබා ගැනීමට
+                    "raw_idx": raw_idx
                 })
 
             # --- STRUCTURE ENGINE (CHoCH / BOS) ---
@@ -282,6 +292,7 @@ else:
                     if structure_state == "IDLE": structure_state = "BEAR"
 
             # --- ICT METRICS (MSS, BSL, SSL) ---
+            liquidity_count = int(liquidity_count)
             display_peaks = peaks[-liquidity_count:] if len(peaks) >= liquidity_count else peaks
             display_troughs = troughs[-liquidity_count:] if len(troughs) >= liquidity_count else troughs
 
@@ -351,7 +362,7 @@ else:
                         ob_top = float(max(open_prices[t], close_prices[t]))
                         if min(low_prices[t+1:]) > ob_bottom:
                             end_idx = min(t + ob_length, len(data) - 1)
-                            fig.add_shape(type="rect", x0=data.index[t-1], y0=ob_bottom, x1=data.index[end_idx], y1=ob_top, fillcolor="rgba(8, 153, 129, 0.05)", line=dict(color="#089981", width=1))
+                            fig.add_shape(type="rect", x0=t - 1 if isinstance(t, int) else data.index[t-1], y0=ob_bottom, x1=data.index[end_idx], y1=ob_top, fillcolor="rgba(8, 153, 129, 0.05)", line=dict(color="#089981", width=1))
                             sl_val = ob_bottom - (ob_top - ob_bottom) * 0.15
                             tp_val = ob_top + (ob_top - sl_val) * 3.0
                             append_signal_raw("🟢 Bullish OB", data.index[t].strftime('%Y-%m-%d %H:%M'), ob_top, sl_val, tp_val, "LONG", t)
@@ -365,18 +376,14 @@ else:
                     fig.add_shape(type="line", x0=data.index[troughs[-2]], y0=low_prices[troughs[-2]], x1=data.index[troughs[-1]], y1=low_prices[troughs[-1]], line=dict(color="#00aaff", width=3))
                     append_signal_raw("⚠️ Double Bottom", data.index[troughs[-1]].strftime('%Y-%m-%d'), low_prices[troughs[-1]], low_prices[troughs[-1]]*0.99, low_prices[troughs[-1]]*1.02, "LONG", troughs[-1])
 
-
             # --- INTERACTIVE SELECTED ROW / POSITION OVERLAY ENGINE ---
             st.sidebar.markdown("---")
             st.sidebar.subheader("🎯 Active Trade Visualizer")
             
-            # 1. පරිශීලකයාට කැමති පරිදි Box එකේ දුර (Candle Width) පාලනය කිරීමට Slider එකක් එකතු කිරීම
             position_duration = st.sidebar.slider("Projection Box Length (Candles)", 5, 150, 35)
-            
             selected_signal_idx = st.sidebar.number_input("Select Signal Row Index from Table Below to Project Overlay:", min_value=0, max_value=max(0, len(trade_table_data)-1), value=0, step=1)
             
             if trade_table_data:
-                # [නිවැරදි කිරීම] දත්ත වගුව මුලින්ම Sort කර පසුව නව Index එක යෙදීම නිසා ඉහළ සිට පහළට (0, 1, 2...) අනුපිළිවෙළ හරියාකාරව සකස් වේ.
                 df_base = pd.DataFrame(trade_table_data).drop_duplicates(subset=["Type", "Entry"]).sort_values(by="Signal Date", ascending=False).reset_index(drop=True)
                 
                 if selected_signal_idx < len(df_base):
@@ -388,35 +395,25 @@ else:
                     t_type = target_row["Type"]
                     start_candle_idx = int(target_row["raw_idx"])
                     
-                    # Box එක අවසන් විය යුතු නිවැරදි Candle Index එක සෙවීම (චාර්ට් එකෙන් පිට පැනීම වැළැක්වීමට)
                     end_candle_idx = min(start_candle_idx + position_duration, len(data) - 1)
-                    
                     x0_date = data.index[start_candle_idx]
                     x1_date = data.index[end_candle_idx]
                     
-                    # TradingView නිවැරදි නිමාව සහිතව Box එක ඇඳීම
                     if t_side == "LONG":
-                        # Target Box (Green)
                         fig.add_shape(type="rect", x0=x0_date, y0=t_entry, x1=x1_date, y1=t_tp, fillcolor="rgba(8, 153, 129, 0.22)", line=dict(width=0))
-                        # Stop Loss Box (Red)
                         fig.add_shape(type="rect", x0=x0_date, y0=t_sl, x1=x1_date, y1=t_entry, fillcolor="rgba(242, 54, 69, 0.22)", line=dict(width=0))
-                        # Lines & Labels
                         fig.add_shape(type="line", x0=x0_date, y0=t_entry, x1=x1_date, y1=t_entry, line=dict(color="#00ffcc", width=2))
                         fig.add_annotation(x=x1_date, y=t_tp, text=f"🎯 TP: {t_tp}", showarrow=False, xanchor="left", font=dict(color="#089981", size=11, family="Arial Black"), bgcolor="rgba(11,14,20,0.9)")
                         fig.add_annotation(x=x1_date, y=t_sl, text=f"🛑 SL: {t_sl}", showarrow=False, xanchor="left", font=dict(color="#f23645", size=11, family="Arial Black"), bgcolor="rgba(11,14,20,0.9)")
                         fig.add_annotation(x=x0_date, y=t_entry, text=f"🟢 LONG ({t_type})", showarrow=True, arrowcolor="#00ffcc", font=dict(color="#00ffcc", size=10), bgcolor="rgba(11,14,20,0.9)", ay=-40)
                     else:
-                        # Target Box (Green for Short)
                         fig.add_shape(type="rect", x0=x0_date, y0=t_tp, x1=x1_date, y1=t_entry, fillcolor="rgba(8, 153, 129, 0.22)", line=dict(width=0))
-                        # Stop Loss Box (Red for Short)
                         fig.add_shape(type="rect", x0=x0_date, y0=t_entry, x1=x1_date, y1=t_sl, fillcolor="rgba(242, 54, 69, 0.22)", line=dict(width=0))
-                        # Lines & Labels
                         fig.add_shape(type="line", x0=x0_date, y0=t_entry, x1=x1_date, y1=t_entry, line=dict(color="#ff3344", width=2))
                         fig.add_annotation(x=x1_date, y=t_tp, text=f"🎯 TP: {t_tp}", showarrow=False, xanchor="left", font=dict(color="#089981", size=11, family="Arial Black"), bgcolor="rgba(11,14,20,0.9)")
                         fig.add_annotation(x=x1_date, y=t_sl, text=f"🛑 SL: {t_sl}", showarrow=False, xanchor="left", font=dict(color="#f23645", size=11, family="Arial Black"), bgcolor="rgba(11,14,20,0.9)")
                         fig.add_annotation(x=x0_date, y=t_entry, text=f"🔴 SHORT ({t_type})", showarrow=True, arrowcolor="#ff3344", font=dict(color="#ff3344", size=10), bgcolor="rgba(11,14,20,0.9)", ay=40)
 
-            # Render Chart
             fig.update_layout(
                 title=f"{ticker} Live Chart | Multi-Forecast Engine with Inline Matrix Customizer",
                 xaxis_title="Date/Time", template="plotly_dark",
@@ -427,14 +424,12 @@ else:
             )
             st.plotly_chart(fig, use_container_width=True)
 
-
             # --- EDITABLE SIGNAL TABLE ---
             st.markdown("---")
             st.write("### 📊 Live Actionable Signals & Custom Risk Matrix Editor")
             st.info("💡 **How to see Position on Chart**: Look at the index number of any row in the table below, then input that number into the **'Active Trade Visualizer'** box inside the left Sidebar! You can also adjust its candle distance using the slider.")
             
             if trade_table_data:
-                # වගුව පෙන්වීමට පෙර අනවශ්‍ය 'raw_idx' තීරුව ඉවත් කිරීම
                 df_to_show = df_base.drop(columns=["raw_idx"], errors="ignore")
                 
                 if "df_editable" not in st.session_state or st.session_state.get("current_ticker") != ticker:
@@ -443,7 +438,6 @@ else:
                     st.session_state.df_editable = df_to_show.copy()
                     st.session_state.current_ticker = ticker
                 
-                # Table එකේ Index එක දැන් 0, 1, 2 කියලා පිළිවෙළට ඉහළ සිට පහළට පෙන්වයි
                 edited_df = st.data_editor(
                     st.session_state.df_editable,
                     hide_index=False, 
@@ -489,30 +483,47 @@ else:
             else:
                 st.info("⏳ Scanning Matrix... No valid unmitigated entry conditions met on the immediate horizon.")
 
-            # --- USER FEEDBACK SYSTEM ---
+            # --- USER FEEDBACK SYSTEM (PERMANENT STORAGE VIA SQLITE) ---
             st.markdown("---")
             st.write("### 💬 Trader Feedback & Suggestions Hub")
-            if "trader_feedbacks" not in st.session_state:
-                st.session_state.trader_feedbacks = [
-                    {"User": "AlphaTrader", "Feedback": "The live position size updater inside the table is incredibly fast. Love it!"},
-                    {"User": "CryptoWhale", "Feedback": "Can you add an option for Trailing Stop Losses next?"}
-                ]
             
             with st.form("feedback_form", clear_on_submit=True):
                 user_name = st.text_input("Your Name / Alias:", placeholder="e.g., Anonymous Trader")
                 feedback_text = st.text_area("Your Feedback / Feature Request:", placeholder="Write your thoughts or suggestion here...")
                 submit_btn = st.form_submit_button("Submit Feedback")
+                
                 if submit_btn:
                     if feedback_text.strip() != "":
                         display_name = user_name.strip() if user_name.strip() != "" else "Anonymous Trader"
-                        st.session_state.trader_feedbacks.insert(0, {"User": display_name, "Feedback": feedback_text.strip()})
-                        st.success("Thank you! Your feedback has been posted successfully.")
+                        
+                        # Database Insert Execution
+                        conn = sqlite3.connect('users.db')
+                        c = conn.cursor()
+                        c.execute('INSERT INTO feedbacks (user_name, feedback_text) VALUES (?, ?)', (display_name, feedback_text.strip()))
+                        conn.commit()
+                        conn.close()
+                        
+                        st.success("Thank you! Your feedback has been saved permanently to the database.")
+                        st.rerun()
                     else:
                         st.warning("Please write something before submitting.")
             
             st.markdown("#### Recent Community Feedback")
-            for fb in st.session_state.trader_feedbacks:
-                st.markdown(f"> **👤 {fb['User']}:** {fb['Feedback']}")
+            
+            # Fetch permanent rows from database
+            conn = sqlite3.connect('users.db')
+            c = conn.cursor()
+            c.execute('SELECT user_name, feedback_text FROM feedbacks ORDER BY id DESC')
+            all_feedbacks = c.fetchall()
+            conn.close()
+            
+            if all_feedbacks:
+                for fb in all_feedbacks:
+                    st.markdown(f"> **👤 {fb[0]}:** {fb[1]}")
+            else:
+                # Fallback placeholders when database table has 0 logs
+                st.markdown("> **👤 AlphaTrader:** The live position size updater inside the table is incredibly fast. Love it!")
+                st.markdown("> **👤 CryptoWhale:** Can you add an option for Trailing Stop Losses next?")
 
     except Exception as e:
         st.error(f"Something went wrong: {e}")
