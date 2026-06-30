@@ -55,24 +55,34 @@ def login_user(email, password):
 # Database එක Initialize කිරීම
 init_db()
 
-st.set_page_config(page_title="Pro Trader AI-Less Tool", layout="wide")
+# Page Config එක මුලින්ම සකසමු
+st.set_page_config(page_title="Pro Trader AI-Less Tool", layout="wide", initial_sidebar_state="expanded")
 
-# --- OPTIMIZED CSS & ULTRA SECURITY JAVASCRIPT FOR HIDING MANAGE APP & CODE PROTECTION ---
+# --- OPTIMIZED CSS & JAVASCRIPT FOR TOOLBOX VISIBILITY & MANAGE APP REMOVAL ---
 st.markdown("""
 <style>
-/* CSS මඟින් සාමාන්‍ය elements සැඟවීම */
+/* 1. මෙනු සහ ෆුටර් සැඟවීම */
 #MainMenu {visibility: hidden !important;}
 footer {visibility: hidden !important;}
-header {visibility: hidden !important;}
-stDecoration {display:none !important;}
 
-/* ප්‍රධාන තේමාව සහ හැඩතල ගැන්වීම් */
+/* 2. SIDEBAR එක සහ TOOLBOX එක අනිවාර්යයෙන්ම පෙන්වීමට අදාළ CSS */
+[data-testid="stSidebar"] {
+    visibility: visible !important;
+    display: flex !important;
+}
+[data-testid="collapsedControl"] {
+    visibility: visible !important;
+    display: block !important;
+    color: #00ffcc !important; /* Sidebar එක ඇරීමට ඇති ඊතල ලකුණ පැහැදිලිව පෙන්වීමට */
+}
+
+/* 3. තේමාව සහ හැඩතල ගැන්වීම් */
 .stApp {background-color: #0b0e14; color: #ecf0f1; }
 h1 {
     color: #00ffcc !important; 
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
     font-size: 22px !important; 
-    margin-top: -40px !important; 
+    margin-top: -20px !important; 
     margin-bottom: 2px !important;
 }
 h3 {
@@ -84,15 +94,14 @@ h3 {
 }
 div[data-testid="stMetricValue"] { color: #00ffcc !important; }
 .block-container {
-    padding-top: 1.5rem !important;
+    padding-top: 2rem !important;
     padding-bottom: 0rem !important;
 }
 </style>
 
 <script>
-    // --- 1. MANAGE APP බොත්තම පමණක් ආරක්ෂිතව ඉවත් කිරීමේ JAVASCRIPT කේතය ---
+    // --- 1. MANAGE APP *පමණක්* ආරක්ෂිතව ඉවත් කිරීමේ JAVASCRIPT කේතය ---
     function removeManageAppButton() {
-        // ක්‍රමය A: සියලුම බොත්තම් පරීක්ෂා කර "Manage app" වචනය සහිත බොත්තම පමණක් ඉවත් කිරීම
         const buttons = document.querySelectorAll('button');
         buttons.forEach(btn => {
             if (btn.textContent && (btn.textContent.includes('Manage app') || btn.textContent.includes('Manage'))) {
@@ -100,11 +109,10 @@ div[data-testid="stMetricValue"] { color: #00ffcc !important; }
             }
         });
 
-        // ක්‍රමය B: බොත්තම අඩංගු විය හැකි වෙනත් විශේෂිත බැනර් සහ ටැග් ඉවත් කිරීම
         const viewerBadge = document.querySelector('.stViewerBadge');
         if (viewerBadge) viewerBadge.remove();
         
-        // Shadow DOM එකක් ඇතුළත ඇති බොත්තම්ද පිරික්සා ඉවත් කිරීම
+        // Shadow DOM පිරික්සීම
         const hosts = document.querySelectorAll('*');
         hosts.forEach(host => {
             if (host.shadowRoot) {
@@ -118,10 +126,8 @@ div[data-testid="stMetricValue"] { color: #00ffcc !important; }
         });
     }
 
-    // පිටුව Load වන විට සහ ඉන්පසු සෑම තත්පරයකටම වරක් පසුබිමෙන් ක්‍රියාත්මක වේ
     document.addEventListener('DOMContentLoaded', removeManageAppButton);
     setInterval(removeManageAppButton, 1000);
-
 
     // --- 2. CODE PROTECTION (RIGHT CLICK & KEYBOARD BLOCK) ---
     document.addEventListener('contextmenu', function(event) {
@@ -129,30 +135,12 @@ div[data-testid="stMetricValue"] { color: #00ffcc !important; }
     });
 
     document.addEventListener('keydown', function(e) {
-        if (e.keyCode === 123) {
-            e.preventDefault();
-            return false;
-        }
-        if (e.ctrlKey && e.shiftKey && e.keyCode === 73) {
-            e.preventDefault();
-            return false;
-        }
-        if (e.ctrlKey && e.shiftKey && e.keyCode === 74) {
-            e.preventDefault();
-            return false;
-        }
-        if (e.ctrlKey && e.keyCode === 85) {
-            e.preventDefault();
-            return false;
-        }
-        if (e.ctrlKey && e.shiftKey && e.keyCode === 67) {
-            e.preventDefault();
-            return false;
-        }
-        if (e.ctrlKey && e.keyCode === 83) {
-            e.preventDefault();
-            return false;
-        }
+        if (e.keyCode === 123) { e.preventDefault(); return false; }
+        if (e.ctrlKey && e.shiftKey && e.keyCode === 73) { e.preventDefault(); return false; }
+        if (e.ctrlKey && e.shiftKey && e.keyCode === 74) { e.preventDefault(); return false; }
+        if (e.ctrlKey && e.keyCode === 85) { e.preventDefault(); return false; }
+        if (e.ctrlKey && e.shiftKey && e.keyCode === 67) { e.preventDefault(); return false; }
+        if (e.ctrlKey && e.keyCode === 83) { e.preventDefault(); return false; }
     });
 </script>
 """, unsafe_allow_html=True)
@@ -204,6 +192,11 @@ if not st.session_state.logged_in:
                     st.error("Passwords do not match!")
             else:
                 st.warning("Please fill out all fields.")
+
+    # Login වෙන්න කලින් Sidebar එක හිස්ව හෝ කුඩාවට තිබිය හැක. 
+    # පරිශීලකයාට දැනගැනීම සඳහා Sidebar එකේ සටහනක් යොදමු.
+    st.sidebar.markdown("### 🔒 System Locked")
+    st.sidebar.info("Please login to activate the Pro Trader Toolbox controls.")
 
 # --- MAIN APPLICATION (ONLY SHOWS IF LOGGED IN) ---
 else:
@@ -286,7 +279,7 @@ else:
                     "Side": side
                 })
 
-            # --- 1. BOS & CHoCH (STRUCTURE) ENGINE ---
+            # --- BOS & CHoCH (STRUCTURE) ENGINE ---
             last_high = high_prices[peaks[-1]] if len(peaks) > 0 else max(high_prices)
             last_low = low_prices[troughs[-1]] if len(troughs) > 0 else min(low_prices)
             structure_state = "IDLE" 
@@ -316,7 +309,7 @@ else:
                         last_low = low_prices[idx]
                         if structure_state == "IDLE": structure_state = "BEAR"
 
-            # --- 2. BSL / SSL & MSS ENGINE ---
+            # --- BSL / SSL & MSS ENGINE ---
             if show_ict_metrics:
                 display_peaks = peaks[-liquidity_count:] if len(peaks) >= liquidity_count else peaks
                 display_troughs = troughs[-liquidity_count:] if len(troughs) >= liquidity_count else troughs
@@ -336,7 +329,7 @@ else:
                         tp_val = close_prices[idx] - (sl_val - close_prices[idx]) * 3.0
                         append_signal_raw("⚡ BEARISH MSS", data.index[idx].strftime('%Y-%m-%d %H:%M'), close_prices[idx], sl_val, tp_val, "SHORT")
 
-            # --- 3. AUTO EQH & EQL LIQUIDITY DETECTOR ---
+            # --- AUTO EQH & EQL LIQUIDITY DETECTOR ---
             if show_eqh_eql and len(peaks) >= 2:
                 for i in range(len(peaks)-1, max(0, len(peaks)-4), -1):
                     p1, p2 = peaks[i-1], peaks[i]
@@ -361,7 +354,7 @@ else:
                         append_signal_raw("🟢 EQL Liquidity", data.index[t2].strftime('%Y-%m-%d %H:%M'), eql_level, sl_val, tp_val, "LONG")
                         break
 
-            # --- 4. VALID FVG (FAIR VALUE GAP) DETECTION ---
+            # --- VALID FVG (FAIR VALUE GAP) DETECTION ---
             if show_ob:
                 for i in range(2, len(data)):
                     if low_prices[i] > high_prices[i-2] and (close_prices[i-1] > open_prices[i-1]):
@@ -380,7 +373,7 @@ else:
                             tp_val = fvg_bottom - (sl_val - fvg_bottom) * 3.0
                             append_signal_raw("🔴 FVG Sell Zone", data.index[i-1].strftime('%Y-%m-%d %H:%M'), fvg_bottom, sl_val, tp_val, "SHORT")
 
-            # --- 5. VALID ORDER BLOCK DETECTION ---
+            # --- VALID ORDER BLOCK DETECTION ---
             if show_ob:
                 for p in peaks:
                     if p < len(data) - 2:
@@ -402,7 +395,7 @@ else:
                             tp_val = ob_top + (ob_top - sl_val) * 3.0
                             append_signal_raw("🟢 Bullish OB", data.index[t].strftime('%Y-%m-%d %H:%M'), ob_top, sl_val, tp_val, "LONG")
 
-            # --- 6. CLASSIC CHART PATTERNS ENGINE ---
+            # --- CLASSIC CHART PATTERNS ENGINE ---
             if show_patterns and len(peaks) >= 3 and len(troughs) >= 3:
                 if abs(high_prices[peaks[-2]] - high_prices[peaks[-1]]) / high_prices[peaks[-2]] < 0.015:
                     fig.add_shape(type="line", x0=data.index[peaks[-2]], y0=high_prices[peaks[-2]], x1=data.index[peaks[-1]], y1=high_prices[peaks[-1]], line=dict(color="#ffaa00", width=3))
@@ -428,7 +421,7 @@ else:
             )
             st.plotly_chart(fig, use_container_width=True)
 
-            # --- 7. EDITABLE SIGNAL TABLE ---
+            # --- EDITABLE SIGNAL TABLE ---
             st.markdown("---")
             st.write("### 📊 Live Actionable Signals & Custom Risk Matrix Editor")
             st.info("💡 **How to use**: Double-click on any cell in **'Account Balance ($)'** or **'Risk (%)'** columns to input your desired values, then press **Enter**.")
@@ -489,7 +482,7 @@ else:
             else:
                 st.info("⏳ Scanning Matrix... No valid unmitigated entry conditions met on the immediate horizon.")
 
-            # --- 8. USER FEEDBACK SYSTEM ---
+            # --- USER FEEDBACK SYSTEM ---
             st.markdown("---")
             st.write("### 💬 Trader Feedback & Suggestions Hub")
             
