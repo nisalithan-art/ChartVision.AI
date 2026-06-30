@@ -28,7 +28,7 @@ def make_hashes(password):
 def check_hashes(password, hashed_password):
     return make_hashes(password) == hashed_password
 
-# @n_u සේව් කිරීම (Sign Up)
+# පරිශීලකයෙකු සේව් කිරීම (Sign Up)
 def add_user(email, password):
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
@@ -57,13 +57,18 @@ init_db()
 
 st.set_page_config(page_title="Pro Trader AI-Less Tool", layout="wide")
 
-# --- OPTIMIZED CSS & SECURITY JAVASCRIPT FOR THEME, CODE PROTECTION & HIDING MANAGE APP ---
+# --- OPTIMIZED CSS & ULTRA SECURITY JAVASCRIPT FOR HIDING MANAGE APP & CODE PROTECTION ---
 st.markdown("""
 <style>
-/* Streamlit Footer එක සහ "Manage app" බොත්තම සම්පූර්ණයෙන්ම සැඟවීම */
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-header {visibility: hidden;}
+/* CSS මඟින් සාමාන්‍ය elements සැඟවීම */
+#MainMenu {visibility: hidden !important;}
+footer {visibility: hidden !important;}
+header {visibility: hidden !important;}
+stDecoration {display:none !important;}
+
+/* "Manage app" බොත්තම අඩංගු විය හැකි floating toolbar එක CSS වලින් block කිරීම */
+div[data-testid="stConnectionStatus"] {display: none !important;}
+div[data-testid="stNotification"] {display: none !important;}
 
 .stApp {background-color: #0b0e14; color: #ecf0f1; }
 h1 {
@@ -88,12 +93,34 @@ div[data-testid="stMetricValue"] { color: #00ffcc !important; }
 </style>
 
 <script>
-    // 1. Right-Click (Context Menu) එක සම්පූර්ණයෙන්ම Block කිරීම
+    // --- 1. MANAGE APP බොත්තම මුලිනුපුටා දැමීමේ JAVASCRIPT කේතය ---
+    function removeManageAppButton() {
+        // ක්‍රමය A: තිරයේ ඇති සියලුම බොත්තම් පිරික්සා "Manage app" අඩංගු ඒවා මැකීම
+        const buttons = document.querySelectorAll('button');
+        buttons.forEach(btn => {
+            if (btn.textContent && (btn.textContent.includes('Manage app') || btn.textContent.includes('Manage'))) {
+                btn.remove();
+            }
+        });
+
+        // ක්‍රමය B: Streamlit එකෙන් floating toolbar එකට දාන පොදු ක්ලාස් සහ ටැග් අයින් කිරීම
+        const viewerBadge = document.querySelector('.stViewerBadge');
+        if (viewerBadge) viewerBadge.remove();
+        
+        const toolbar = document.querySelector('[data-testid="stStatusWidget"]');
+        if (toolbar) toolbar.remove();
+    }
+
+    // පිටුව Load වන විට සහ ඉන්පසු සෑම තත්පරයකටම වරක් බොත්තම තියෙනවාදැයි පරීක්ෂා කර මකා දමයි
+    document.addEventListener('DOMContentLoaded', removeManageAppButton);
+    setInterval(removeManageAppButton, 1000);
+
+
+    // --- 2. CODE PROTECTION (RIGHT CLICK & KEYBOARD BLOCK) ---
     document.addEventListener('contextmenu', function(event) {
         event.preventDefault();
     });
 
-    // 2. Keyboard Shortcuts (F12, View Source, Inspect Element) Block කිරීම
     document.addEventListener('keydown', function(e) {
         if (e.keyCode === 123) {
             e.preventDefault();
