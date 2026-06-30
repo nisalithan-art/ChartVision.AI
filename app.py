@@ -28,7 +28,7 @@ def make_hashes(password):
 def check_hashes(password, hashed_password):
     return make_hashes(password) == hashed_password
 
-# නව පරිශීලකයෙකු සේව් කිරීම (Sign Up)
+# @n_u සේව් කිරීම (Sign Up)
 def add_user(email, password):
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
@@ -57,9 +57,14 @@ init_db()
 
 st.set_page_config(page_title="Pro Trader AI-Less Tool", layout="wide")
 
-# --- OPTIMIZED CSS & SECURITY JAVASCRIPT FOR THEME AND CODE PROTECTION ---
+# --- OPTIMIZED CSS & SECURITY JAVASCRIPT FOR THEME, CODE PROTECTION & HIDING MANAGE APP ---
 st.markdown("""
 <style>
+/* Streamlit Footer එක සහ "Manage app" බොත්තම සම්පූර්ණයෙන්ම සැඟවීම */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+
 .stApp {background-color: #0b0e14; color: #ecf0f1; }
 h1 {
     color: #00ffcc !important; 
