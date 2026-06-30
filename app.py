@@ -203,15 +203,21 @@ else:
 
     @st.cache_data
     def load_data(symbol, p, tf):
-        df = yf.download(symbol, period=p, interval=tf)
-        return df
+        try:
+            df = yf.download(symbol, period=p, interval=tf, progress=False)
+            return df
+        except Exception:
+            return pd.DataFrame()
 
-    try:
+    # --- LOADING DATA WITH SAFETY CHECK ---
+    with st.spinner("🔄 Fetching market matrix from Yahoo Finance... Please wait."):
         data = load_data(ticker, period, timeframe)
-        
-        if data.empty:
-            st.error("No data found! Please check the Ticker symbol.")
-        else:
+    
+    # මෙතනින් තමයි අර කරදරකාරී Errors ඔක්කොම වැලැක්වෙන්නේ
+    if data is None or data.empty or 'Close' not in data.columns:
+        st.warning("⚠️ Waiting for data synchronisation... If this message persists for more than 5 seconds, please check your Ticker symbol or try switching the Timeframe/Period combination.")
+    else:
+        try:
             if isinstance(data.columns, pd.MultiIndex):
                 data.columns = [col[0] for col in data.columns]
             else:
@@ -525,5 +531,5 @@ else:
                 st.markdown("> **👤 AlphaTrader:** The live position size updater inside the table is incredibly fast. Love it!")
                 st.markdown("> **👤 CryptoWhale:** Can you add an option for Trailing Stop Losses next?")
 
-    except Exception as e:
-        st.error(f"Something went wrong: {e}")
+        except Exception as e:
+            st.error(f"Something went wrong while compiling charts: {e}")
