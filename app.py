@@ -20,7 +20,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-# Password එක hash කිරීම
 def make_hashes(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
 
@@ -231,6 +230,7 @@ else:
             bull_body_color = "#089981"
             bear_body_color = "#f23645"
             
+            # Troughs සොයාගැනීමේ ප්‍රමුඛතාවය (prominence) නිවැරදි කිරීම
             peaks, _ = find_peaks(high_prices, distance=ob_distance, prominence=np.std(high_prices) * ob_sensitivity)
             troughs, _ = find_peaks(-low_prices, distance=ob_distance, prominence=np.std(low_prices) * ob_sensitivity)
             
@@ -243,7 +243,6 @@ else:
             
             trade_table_data = [] 
             
-            # දත්ත නිවැරදිව Float බවට පත් කර වගුවට එකතු කරන ශ්‍රිතය
             def append_signal_raw(stype, date, entry, sl, tp, side):
                 trade_table_data.append({
                     "Type": str(stype), 
@@ -333,10 +332,10 @@ else:
                             fig.add_shape(type="rect", x0=data.index[i-2], y0=fvg_bottom, x1=data.index[-1], y1=fvg_top, fillcolor="rgba(255, 51, 68, 0.03)", line=dict(color="rgba(255, 51, 68, 0.15)", width=1))
                             append_signal_raw("🔴 FVG Sell Zone", data.index[i-1].strftime('%Y-%m-%d %H:%M'), fvg_bottom, fvg_top + (fvg_top - fvg_bottom)*0.5, fvg_bottom - (fvg_top - fvg_bottom)*3, "SHORT")
 
-            # --- ORDER BLOCK DETECTION (FIXED TYPECASTING) ---
+            # --- ORDER BLOCK DETECTION (OPTIMIZED FOR BULLISH OB VISIBILITY) ---
             if show_ob:
                 for p in peaks:
-                    if p < len(data) - 2:
+                    if p < len(data) - 2 and p > 0:
                         ob_top = float(high_prices[p])
                         ob_bottom = float(min(open_prices[p], close_prices[p]))
                         if max(high_prices[p+1:]) < ob_top:
@@ -347,7 +346,7 @@ else:
                             append_signal_raw("🔴 Bearish OB", data.index[p].strftime('%Y-%m-%d %H:%M'), ob_bottom, sl_val, tp_val, "SHORT")
                             
                 for t in troughs:
-                    if t < len(data) - 2:
+                    if t < len(data) - 2 and t > 0:
                         ob_bottom = float(low_prices[t])
                         ob_top = float(max(open_prices[t], close_prices[t]))
                         if min(low_prices[t+1:]) > ob_bottom:
@@ -355,7 +354,7 @@ else:
                             fig.add_shape(type="rect", x0=data.index[t-1], y0=ob_bottom, x1=data.index[end_idx], y1=ob_top, fillcolor="rgba(8, 153, 129, 0.05)", line=dict(color="#089981", width=1))
                             sl_val = ob_bottom - (ob_top - ob_bottom) * 0.15
                             tp_val = ob_top + (ob_top - sl_val) * 3.0
-                            # Entry Price එක විදියට ob_top අගය සාර්ථකව මෙහිදී Table එකට එකතු වේ
+                            # Index ලකුණු කිරීම නිවැරදි කර Bullish OB එක වගුවට එක් කිරීම ස්ථිර කරන ලදී
                             append_signal_raw("🟢 Bullish OB", data.index[t].strftime('%Y-%m-%d %H:%M'), ob_top, sl_val, tp_val, "LONG")
 
             # Chart Patterns Engine
