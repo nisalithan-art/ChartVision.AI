@@ -242,14 +242,15 @@ else:
             
             trade_table_data = [] 
             
-            def append_signal_raw(stype, date, entry, sl, tp, side):
+            def append_signal_raw(stype, date, entry, sl, tp, side, raw_idx):
                 trade_table_data.append({
                     "Type": str(stype), 
                     "Signal Date": str(date), 
                     "Entry": float(round(entry, 2)),
                     "Stop Loss (SL)": float(round(sl, 2)), 
                     "Take Profit (TP)": float(round(tp, 2)),
-                    "Side": str(side)
+                    "Side": str(side),
+                    "raw_idx": raw_idx  # සිග්නල් එක වැදුණු නියම ඉටිපන්දමේ Index එක මතක තබා ගැනීමට
                 })
 
             # --- STRUCTURE ENGINE (CHoCH / BOS) ---
@@ -262,13 +263,13 @@ else:
                     fig.add_annotation(x=data.index[idx], y=high_prices[idx], text="🔄 CHoCH (Bullish)", showarrow=True, arrowcolor="#00ffcc", font=dict(color="#00ffcc", size=9, family="Arial Black"), bgcolor="rgba(11,14,20,0.9)", ay=-30)
                     sl_val = low_prices[idx-3:idx+1].min()
                     tp_val = close_prices[idx] + (close_prices[idx] - sl_val) * 2.5
-                    append_signal_raw("🔄 CHoCH (Bullish)", data.index[idx].strftime('%Y-%m-%d %H:%M'), close_prices[idx], sl_val, tp_val, "LONG")
+                    append_signal_raw("🔄 CHoCH (Bullish)", data.index[idx].strftime('%Y-%m-%d %H:%M'), close_prices[idx], sl_val, tp_val, "LONG", idx)
                     structure_state = "BULL"
                 elif close_prices[idx] < last_low and structure_state == "BULL":
                     fig.add_annotation(x=data.index[idx], y=low_prices[idx], text="🔄 CHoCH (Bearish)", showarrow=True, arrowcolor="#ff3344", font=dict(color="#ff3344", size=9, family="Arial Black"), bgcolor="rgba(11,14,20,0.9)", ay=30)
                     sl_val = high_prices[idx-3:idx+1].max()
                     tp_val = close_prices[idx] - (sl_val - close_prices[idx]) * 2.5
-                    append_signal_raw("🔄 CHoCH (Bearish)", data.index[idx].strftime('%Y-%m-%d %H:%M'), close_prices[idx], sl_val, tp_val, "SHORT")
+                    append_signal_raw("🔄 CHoCH (Bearish)", data.index[idx].strftime('%Y-%m-%d %H:%M'), close_prices[idx], sl_val, tp_val, "SHORT", idx)
                     structure_state = "BEAR"
                 
                 if close_prices[idx] > last_high:
@@ -293,11 +294,11 @@ else:
                 if len(peaks) > 0 and close_prices[idx] > high_prices[peaks[-1]] and close_prices[idx-1] <= high_prices[peaks[-1]]:
                     sl_val = low_prices[idx-4:idx+1].min()
                     tp_val = close_prices[idx] + (close_prices[idx] - sl_val) * 3.0
-                    append_signal_raw("⚡ BULLISH MSS", data.index[idx].strftime('%Y-%m-%d %H:%M'), close_prices[idx], sl_val, tp_val, "LONG")
+                    append_signal_raw("⚡ BULLISH MSS", data.index[idx].strftime('%Y-%m-%d %H:%M'), close_prices[idx], sl_val, tp_val, "LONG", idx)
                 elif len(troughs) > 0 and close_prices[idx] < low_prices[troughs[-1]] and close_prices[idx-1] >= low_prices[troughs[-1]]:
                     sl_val = high_prices[idx-4:idx+1].max()
                     tp_val = close_prices[idx] - (sl_val - close_prices[idx]) * 3.0
-                    append_signal_raw("⚡ BEARISH MSS", data.index[idx].strftime('%Y-%m-%d %H:%M'), close_prices[idx], sl_val, tp_val, "SHORT")
+                    append_signal_raw("⚡ BEARISH MSS", data.index[idx].strftime('%Y-%m-%d %H:%M'), close_prices[idx], sl_val, tp_val, "SHORT", idx)
 
             # --- EQH & EQL ---
             if show_eqh_eql and len(peaks) >= 2:
@@ -306,7 +307,7 @@ else:
                     if (abs(high_prices[p1] - high_prices[p2]) / high_prices[p1]) < 0.005:
                         eqh_level = (high_prices[p1] + high_prices[p2]) / 2
                         fig.add_shape(type="line", x0=data.index[p1], y0=eqh_level, x1=data.index[-1], y1=eqh_level, line=dict(color="#ff4455", width=2, dash="dashdot"))
-                        append_signal_raw("🔴 EQH Liquidity", data.index[p2].strftime('%Y-%m-%d %H:%M'), eqh_level, eqh_level * 1.008, eqh_level - (eqh_level * 0.008) * 3, "SHORT")
+                        append_signal_raw("🔴 EQH Liquidity", data.index[p2].strftime('%Y-%m-%d %H:%M'), eqh_level, eqh_level * 1.008, eqh_level - (eqh_level * 0.008) * 3, "SHORT", p2)
                         break
             if show_eqh_eql and len(troughs) >= 2:
                 for i in range(len(troughs)-1, max(0, len(troughs)-4), -1):
@@ -314,7 +315,7 @@ else:
                     if (abs(low_prices[t1] - low_prices[t2]) / low_prices[t1]) < 0.005:
                         eql_level = (low_prices[t1] + low_prices[t2]) / 2
                         fig.add_shape(type="line", x0=data.index[t1], y0=eql_level, x1=data.index[-1], y1=eql_level, line=dict(color="#00ffaa", width=2, dash="dashdot"))
-                        append_signal_raw("🟢 EQL Liquidity", data.index[t2].strftime('%Y-%m-%d %H:%M'), eql_level, eql_level * 0.992, eql_level + (eql_level * 0.008) * 3, "LONG")
+                        append_signal_raw("🟢 EQL Liquidity", data.index[t2].strftime('%Y-%m-%d %H:%M'), eql_level, eql_level * 0.992, eql_level + (eql_level * 0.008) * 3, "LONG", t2)
                         break
 
             # --- FVG DETECTION ---
@@ -324,12 +325,12 @@ else:
                         fvg_top, fvg_bottom = low_prices[i], high_prices[i-2]
                         if min(low_prices[i-1:]) >= fvg_bottom:
                             fig.add_shape(type="rect", x0=data.index[i-2], y0=fvg_bottom, x1=data.index[-1], y1=fvg_top, fillcolor="rgba(0, 255, 204, 0.03)", line=dict(color="rgba(0, 255, 204, 0.15)", width=1))
-                            append_signal_raw("🟢 FVG Buy Zone", data.index[i-1].strftime('%Y-%m-%d %H:%M'), fvg_top, fvg_bottom - (fvg_top - fvg_bottom)*0.5, fvg_top + (fvg_top - fvg_bottom)*3, "LONG")
+                            append_signal_raw("🟢 FVG Buy Zone", data.index[i-1].strftime('%Y-%m-%d %H:%M'), fvg_top, fvg_bottom - (fvg_top - fvg_bottom)*0.5, fvg_top + (fvg_top - fvg_bottom)*3, "LONG", i-1)
                     elif high_prices[i] < low_prices[i-2] and (close_prices[i-1] < open_prices[i-1]):
                         fvg_top, fvg_bottom = low_prices[i-2], high_prices[i]
                         if max(high_prices[i-1:]) <= fvg_top:
                             fig.add_shape(type="rect", x0=data.index[i-2], y0=fvg_bottom, x1=data.index[-1], y1=fvg_top, fillcolor="rgba(255, 51, 68, 0.03)", line=dict(color="rgba(255, 51, 68, 0.15)", width=1))
-                            append_signal_raw("🔴 FVG Sell Zone", data.index[i-1].strftime('%Y-%m-%d %H:%M'), fvg_bottom, fvg_top + (fvg_top - fvg_bottom)*0.5, fvg_bottom - (fvg_top - fvg_bottom)*3, "SHORT")
+                            append_signal_raw("🔴 FVG Sell Zone", data.index[i-1].strftime('%Y-%m-%d %H:%M'), fvg_bottom, fvg_top + (fvg_top - fvg_bottom)*0.5, fvg_bottom - (fvg_top - fvg_bottom)*3, "SHORT", i-1)
 
             # --- ORDER BLOCK DETECTION ---
             if show_ob:
@@ -342,7 +343,7 @@ else:
                             fig.add_shape(type="rect", x0=data.index[p-1], y0=ob_bottom, x1=data.index[end_idx], y1=ob_top, fillcolor="rgba(242, 54, 69, 0.05)", line=dict(color="#f23645", width=1))
                             sl_val = ob_top + (ob_top - ob_bottom) * 0.15
                             tp_val = ob_bottom - (sl_val - ob_bottom) * 3.0
-                            append_signal_raw("🔴 Bearish OB", data.index[p].strftime('%Y-%m-%d %H:%M'), ob_bottom, sl_val, tp_val, "SHORT")
+                            append_signal_raw("🔴 Bearish OB", data.index[p].strftime('%Y-%m-%d %H:%M'), ob_bottom, sl_val, tp_val, "SHORT", p)
                             
                 for t in troughs:
                     if t < len(data) - 2 and t > 0:
@@ -353,29 +354,31 @@ else:
                             fig.add_shape(type="rect", x0=data.index[t-1], y0=ob_bottom, x1=data.index[end_idx], y1=ob_top, fillcolor="rgba(8, 153, 129, 0.05)", line=dict(color="#089981", width=1))
                             sl_val = ob_bottom - (ob_top - ob_bottom) * 0.15
                             tp_val = ob_top + (ob_top - sl_val) * 3.0
-                            append_signal_raw("🟢 Bullish OB", data.index[t].strftime('%Y-%m-%d %H:%M'), ob_top, sl_val, tp_val, "LONG")
+                            append_signal_raw("🟢 Bullish OB", data.index[t].strftime('%Y-%m-%d %H:%M'), ob_top, sl_val, tp_val, "LONG", t)
 
             # --- CLASSIC CHART PATTERNS ENGINE ---
             if show_patterns and len(peaks) >= 3 and len(troughs) >= 3:
                 if abs(high_prices[peaks[-2]] - high_prices[peaks[-1]]) / high_prices[peaks[-2]] < 0.015:
                     fig.add_shape(type="line", x0=data.index[peaks[-2]], y0=high_prices[peaks[-2]], x1=data.index[peaks[-1]], y1=high_prices[peaks[-1]], line=dict(color="#ffaa00", width=3))
-                    append_signal_raw("⚠️ Double Top", data.index[peaks[-1]].strftime('%Y-%m-%d'), high_prices[peaks[-1]], high_prices[peaks[-1]]*1.01, high_prices[peaks[-1]]*0.98, "SHORT")
+                    append_signal_raw("⚠️ Double Top", data.index[peaks[-1]].strftime('%Y-%m-%d'), high_prices[peaks[-1]], high_prices[peaks[-1]]*1.01, high_prices[peaks[-1]]*0.98, "SHORT", peaks[-1])
                 if abs(low_prices[troughs[-2]] - low_prices[troughs[-1]]) / low_prices[troughs[-2]] < 0.015:
                     fig.add_shape(type="line", x0=data.index[troughs[-2]], y0=low_prices[troughs[-2]], x1=data.index[troughs[-1]], y1=low_prices[troughs[-1]], line=dict(color="#00aaff", width=3))
-                    append_signal_raw("⚠️ Double Bottom", data.index[troughs[-1]].strftime('%Y-%m-%d'), low_prices[troughs[-1]], low_prices[troughs[-1]]*0.99, low_prices[troughs[-1]]*1.02, "LONG")
+                    append_signal_raw("⚠️ Double Bottom", data.index[troughs[-1]].strftime('%Y-%m-%d'), low_prices[troughs[-1]], low_prices[troughs[-1]]*0.99, low_prices[troughs[-1]]*1.02, "LONG", troughs[-1])
 
 
             # --- INTERACTIVE SELECTED ROW / POSITION OVERLAY ENGINE ---
             st.sidebar.markdown("---")
             st.sidebar.subheader("🎯 Active Trade Visualizer")
             
-            # දැනට Select වී පවතින Row එකක තොරතුරු Session State එක හරහා ලබා ගැනීම
+            # 1. පරිශීලකයාට කැමති පරිදි Box එකේ දුර (Candle Width) පාලනය කිරීමට Slider එකක් එකතු කිරීම
+            position_duration = st.sidebar.slider("Projection Box Length (Candles)", 5, 150, 35)
+            
             selected_signal_idx = st.sidebar.number_input("Select Signal Row Index from Table Below to Project Overlay:", min_value=0, max_value=max(0, len(trade_table_data)-1), value=0, step=1)
             
             if trade_table_data:
+                # [නිවැරදි කිරීම] දත්ත වගුව මුලින්ම Sort කර පසුව නව Index එක යෙදීම නිසා ඉහළ සිට පහළට (0, 1, 2...) අනුපිළිවෙළ හරියාකාරව සකස් වේ.
                 df_base = pd.DataFrame(trade_table_data).drop_duplicates(subset=["Type", "Entry"]).sort_values(by="Signal Date", ascending=False).reset_index(drop=True)
                 
-                # පරිශීලකයා තෝරාගත් Row එකේ දත්ත එකතු කරගැනීම
                 if selected_signal_idx < len(df_base):
                     target_row = df_base.iloc[selected_signal_idx]
                     t_entry = target_row["Entry"]
@@ -383,28 +386,35 @@ else:
                     t_tp = target_row["Take Profit (TP)"]
                     t_side = target_row["Side"]
                     t_type = target_row["Type"]
+                    start_candle_idx = int(target_row["raw_idx"])
                     
-                    # TradingView ආකාරයේ Long/Short Position Box එකක් Chart එක මත නිපදවීම
+                    # Box එක අවසන් විය යුතු නිවැරදි Candle Index එක සෙවීම (චාර්ට් එකෙන් පිට පැනීම වැළැක්වීමට)
+                    end_candle_idx = min(start_candle_idx + position_duration, len(data) - 1)
+                    
+                    x0_date = data.index[start_candle_idx]
+                    x1_date = data.index[end_candle_idx]
+                    
+                    # TradingView නිවැරදි නිමාව සහිතව Box එක ඇඳීම
                     if t_side == "LONG":
                         # Target Box (Green)
-                        fig.add_shape(type="rect", x0=data.index[0], y0=t_entry, x1=data.index[-1], y1=t_tp, fillcolor="rgba(8, 153, 129, 0.15)", line=dict(width=0))
+                        fig.add_shape(type="rect", x0=x0_date, y0=t_entry, x1=x1_date, y1=t_tp, fillcolor="rgba(8, 153, 129, 0.22)", line=dict(width=0))
                         # Stop Loss Box (Red)
-                        fig.add_shape(type="rect", x0=data.index[0], y0=t_sl, x1=data.index[-1], y1=t_entry, fillcolor="rgba(242, 54, 69, 0.15)", line=dict(width=0))
+                        fig.add_shape(type="rect", x0=x0_date, y0=t_sl, x1=x1_date, y1=t_entry, fillcolor="rgba(242, 54, 69, 0.22)", line=dict(width=0))
                         # Lines & Labels
-                        fig.add_shape(type="line", x0=data.index[0], y0=t_entry, x1=data.index[-1], y1=t_entry, line=dict(color="#00ffcc", width=2))
-                        fig.add_annotation(x=data.index[-1], y=t_tp, text=f"🎯 TP: {t_tp}", showarrow=False, xanchor="right", font=dict(color="#089981", size=11, family="Arial Black"), bgcolor="rgba(11,14,20,0.9)")
-                        fig.add_annotation(x=data.index[-1], y=t_sl, text=f"🛑 SL: {t_sl}", showarrow=False, xanchor="right", font=dict(color="#f23645", size=11, family="Arial Black"), bgcolor="rgba(11,14,20,0.9)")
-                        fig.add_annotation(x=data.index[5], y=t_entry, text=f"🟢 ACTIVE LONG ({t_type})", showarrow=False, font=dict(color="#00ffcc", size=10), bgcolor="rgba(11,14,20,0.9)")
+                        fig.add_shape(type="line", x0=x0_date, y0=t_entry, x1=x1_date, y1=t_entry, line=dict(color="#00ffcc", width=2))
+                        fig.add_annotation(x=x1_date, y=t_tp, text=f"🎯 TP: {t_tp}", showarrow=False, xanchor="left", font=dict(color="#089981", size=11, family="Arial Black"), bgcolor="rgba(11,14,20,0.9)")
+                        fig.add_annotation(x=x1_date, y=t_sl, text=f"🛑 SL: {t_sl}", showarrow=False, xanchor="left", font=dict(color="#f23645", size=11, family="Arial Black"), bgcolor="rgba(11,14,20,0.9)")
+                        fig.add_annotation(x=x0_date, y=t_entry, text=f"🟢 LONG ({t_type})", showarrow=True, arrowcolor="#00ffcc", font=dict(color="#00ffcc", size=10), bgcolor="rgba(11,14,20,0.9)", ay=-40)
                     else:
-                        # Target Box (Green for Short - Profit is Downwards)
-                        fig.add_shape(type="rect", x0=data.index[0], y0=t_tp, x1=data.index[-1], y1=t_entry, fillcolor="rgba(8, 153, 129, 0.15)", line=dict(width=0))
-                        # Stop Loss Box (Red for Short - Risk is Upwards)
-                        fig.add_shape(type="rect", x0=data.index[0], y0=t_entry, x1=data.index[-1], y1=t_sl, fillcolor="rgba(242, 54, 69, 0.15)", line=dict(width=0))
+                        # Target Box (Green for Short)
+                        fig.add_shape(type="rect", x0=x0_date, y0=t_tp, x1=x1_date, y1=t_entry, fillcolor="rgba(8, 153, 129, 0.22)", line=dict(width=0))
+                        # Stop Loss Box (Red for Short)
+                        fig.add_shape(type="rect", x0=x0_date, y0=t_entry, x1=x1_date, y1=t_sl, fillcolor="rgba(242, 54, 69, 0.22)", line=dict(width=0))
                         # Lines & Labels
-                        fig.add_shape(type="line", x0=data.index[0], y0=t_entry, x1=data.index[-1], y1=t_entry, line=dict(color="#ff3344", width=2))
-                        fig.add_annotation(x=data.index[-1], y=t_tp, text=f"🎯 TP: {t_tp}", showarrow=False, xanchor="right", font=dict(color="#089981", size=11, family="Arial Black"), bgcolor="rgba(11,14,20,0.9)")
-                        fig.add_annotation(x=data.index[-1], y=t_sl, text=f"🛑 SL: {t_sl}", showarrow=False, xanchor="right", font=dict(color="#f23645", size=11, family="Arial Black"), bgcolor="rgba(11,14,20,0.9)")
-                        fig.add_annotation(x=data.index[5], y=t_entry, text=f"🔴 ACTIVE SHORT ({t_type})", showarrow=False, font=dict(color="#ff3344", size=10), bgcolor="rgba(11,14,20,0.9)")
+                        fig.add_shape(type="line", x0=x0_date, y0=t_entry, x1=x1_date, y1=t_entry, line=dict(color="#ff3344", width=2))
+                        fig.add_annotation(x=x1_date, y=t_tp, text=f"🎯 TP: {t_tp}", showarrow=False, xanchor="left", font=dict(color="#089981", size=11, family="Arial Black"), bgcolor="rgba(11,14,20,0.9)")
+                        fig.add_annotation(x=x1_date, y=t_sl, text=f"🛑 SL: {t_sl}", showarrow=False, xanchor="left", font=dict(color="#f23645", size=11, family="Arial Black"), bgcolor="rgba(11,14,20,0.9)")
+                        fig.add_annotation(x=x0_date, y=t_entry, text=f"🔴 SHORT ({t_type})", showarrow=True, arrowcolor="#ff3344", font=dict(color="#ff3344", size=10), bgcolor="rgba(11,14,20,0.9)", ay=40)
 
             # Render Chart
             fig.update_layout(
@@ -421,19 +431,22 @@ else:
             # --- EDITABLE SIGNAL TABLE ---
             st.markdown("---")
             st.write("### 📊 Live Actionable Signals & Custom Risk Matrix Editor")
-            st.info("💡 **How to see Position on Chart**: Look at the index number of any row in the table below, then input that number into the **'Active Trade Visualizer'** box inside the left Sidebar! It will automatically project TradingView style Long/Short boxes.")
+            st.info("💡 **How to see Position on Chart**: Look at the index number of any row in the table below, then input that number into the **'Active Trade Visualizer'** box inside the left Sidebar! You can also adjust its candle distance using the slider.")
             
             if trade_table_data:
+                # වගුව පෙන්වීමට පෙර අනවශ්‍ය 'raw_idx' තීරුව ඉවත් කිරීම
+                df_to_show = df_base.drop(columns=["raw_idx"], errors="ignore")
+                
                 if "df_editable" not in st.session_state or st.session_state.get("current_ticker") != ticker:
-                    df_base["Account Balance ($)"] = 1000.0
-                    df_base["Risk (%)"] = 1.0
-                    st.session_state.df_editable = df_base.copy()
+                    df_to_show["Account Balance ($)"] = 1000.0
+                    df_to_show["Risk (%)"] = 1.0
+                    st.session_state.df_editable = df_to_show.copy()
                     st.session_state.current_ticker = ticker
                 
-                # පරිශීලකයාට පහසුවෙන් හඳුනාගැනීමට Index එකද සහිතව වගුව පෙන්වීම
+                # Table එකේ Index එක දැන් 0, 1, 2 කියලා පිළිවෙළට ඉහළ සිට පහළට පෙන්වයි
                 edited_df = st.data_editor(
                     st.session_state.df_editable,
-                    hide_index=False, # Index එක සක්‍රිය කරන ලදී (Visual Projection එක තෝරා ගැනීමට)
+                    hide_index=False, 
                     use_container_width=True,
                     disabled=["Type", "Signal Date", "Entry", "Stop Loss (SL)", "Take Profit (TP)", "Side"], 
                     column_order=["Type", "Signal Date", "Entry", "Stop Loss (SL)", "Take Profit (TP)", "Account Balance ($)", "Risk (%)"]
