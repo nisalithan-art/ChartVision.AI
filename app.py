@@ -230,7 +230,6 @@ else:
             bull_body_color = "#089981"
             bear_body_color = "#f23645"
             
-            # Troughs සොයාගැනීමේ ප්‍රමුඛතාවය (prominence) නිවැරදි කිරීම
             peaks, _ = find_peaks(high_prices, distance=ob_distance, prominence=np.std(high_prices) * ob_sensitivity)
             troughs, _ = find_peaks(-low_prices, distance=ob_distance, prominence=np.std(low_prices) * ob_sensitivity)
             
@@ -332,7 +331,7 @@ else:
                             fig.add_shape(type="rect", x0=data.index[i-2], y0=fvg_bottom, x1=data.index[-1], y1=fvg_top, fillcolor="rgba(255, 51, 68, 0.03)", line=dict(color="rgba(255, 51, 68, 0.15)", width=1))
                             append_signal_raw("🔴 FVG Sell Zone", data.index[i-1].strftime('%Y-%m-%d %H:%M'), fvg_bottom, fvg_top + (fvg_top - fvg_bottom)*0.5, fvg_bottom - (fvg_top - fvg_bottom)*3, "SHORT")
 
-            # --- ORDER BLOCK DETECTION (OPTIMIZED FOR BULLISH OB VISIBILITY) ---
+            # --- ORDER BLOCK DETECTION ---
             if show_ob:
                 for p in peaks:
                     if p < len(data) - 2 and p > 0:
@@ -354,10 +353,9 @@ else:
                             fig.add_shape(type="rect", x0=data.index[t-1], y0=ob_bottom, x1=data.index[end_idx], y1=ob_top, fillcolor="rgba(8, 153, 129, 0.05)", line=dict(color="#089981", width=1))
                             sl_val = ob_bottom - (ob_top - ob_bottom) * 0.15
                             tp_val = ob_top + (ob_top - sl_val) * 3.0
-                            # Index ලකුණු කිරීම නිවැරදි කර Bullish OB එක වගුවට එක් කිරීම ස්ථිර කරන ලදී
                             append_signal_raw("🟢 Bullish OB", data.index[t].strftime('%Y-%m-%d %H:%M'), ob_top, sl_val, tp_val, "LONG")
 
-            # Chart Patterns Engine
+            # --- CLASSIC CHART PATTERNS ENGINE ---
             if show_patterns and len(peaks) >= 3 and len(troughs) >= 3:
                 if abs(high_prices[peaks[-2]] - high_prices[peaks[-1]]) / high_prices[peaks[-2]] < 0.015:
                     fig.add_shape(type="line", x0=data.index[peaks[-2]], y0=high_prices[peaks[-2]], x1=data.index[peaks[-1]], y1=high_prices[peaks[-1]], line=dict(color="#ffaa00", width=3))
@@ -366,6 +364,49 @@ else:
                     fig.add_shape(type="line", x0=data.index[troughs[-2]], y0=low_prices[troughs[-2]], x1=data.index[troughs[-1]], y1=low_prices[troughs[-1]], line=dict(color="#00aaff", width=3))
                     append_signal_raw("⚠️ Double Bottom", data.index[troughs[-1]].strftime('%Y-%m-%d'), low_prices[troughs[-1]], low_prices[troughs[-1]]*0.99, low_prices[troughs[-1]]*1.02, "LONG")
 
+
+            # --- INTERACTIVE SELECTED ROW / POSITION OVERLAY ENGINE ---
+            st.sidebar.markdown("---")
+            st.sidebar.subheader("🎯 Active Trade Visualizer")
+            
+            # දැනට Select වී පවතින Row එකක තොරතුරු Session State එක හරහා ලබා ගැනීම
+            selected_signal_idx = st.sidebar.number_input("Select Signal Row Index from Table Below to Project Overlay:", min_value=0, max_value=max(0, len(trade_table_data)-1), value=0, step=1)
+            
+            if trade_table_data:
+                df_base = pd.DataFrame(trade_table_data).drop_duplicates(subset=["Type", "Entry"]).sort_values(by="Signal Date", ascending=False).reset_index(drop=True)
+                
+                # පරිශීලකයා තෝරාගත් Row එකේ දත්ත එකතු කරගැනීම
+                if selected_signal_idx < len(df_base):
+                    target_row = df_base.iloc[selected_signal_idx]
+                    t_entry = target_row["Entry"]
+                    t_sl = target_row["Stop Loss (SL)"]
+                    t_tp = target_row["Take Profit (TP)"]
+                    t_side = target_row["Side"]
+                    t_type = target_row["Type"]
+                    
+                    # TradingView ආකාරයේ Long/Short Position Box එකක් Chart එක මත නිපදවීම
+                    if t_side == "LONG":
+                        # Target Box (Green)
+                        fig.add_shape(type="rect", x0=data.index[0], y0=t_entry, x1=data.index[-1], y1=t_tp, fillcolor="rgba(8, 153, 129, 0.15)", line=dict(width=0))
+                        # Stop Loss Box (Red)
+                        fig.add_shape(type="rect", x0=data.index[0], y0=t_sl, x1=data.index[-1], y1=t_entry, fillcolor="rgba(242, 54, 69, 0.15)", line=dict(width=0))
+                        # Lines & Labels
+                        fig.add_shape(type="line", x0=data.index[0], y0=t_entry, x1=data.index[-1], y1=t_entry, line=dict(color="#00ffcc", width=2))
+                        fig.add_annotation(x=data.index[-1], y=t_tp, text=f"🎯 TP: {t_tp}", showarrow=False, xanchor="right", font=dict(color="#089981", size=11, family="Arial Black"), bgcolor="rgba(11,14,20,0.9)")
+                        fig.add_annotation(x=data.index[-1], y=t_sl, text=f"🛑 SL: {t_sl}", showarrow=False, xanchor="right", font=dict(color="#f23645", size=11, family="Arial Black"), bgcolor="rgba(11,14,20,0.9)")
+                        fig.add_annotation(x=data.index[5], y=t_entry, text=f"🟢 ACTIVE LONG ({t_type})", showarrow=False, font=dict(color="#00ffcc", size=10), bgcolor="rgba(11,14,20,0.9)")
+                    else:
+                        # Target Box (Green for Short - Profit is Downwards)
+                        fig.add_shape(type="rect", x0=data.index[0], y0=t_tp, x1=data.index[-1], y1=t_entry, fillcolor="rgba(8, 153, 129, 0.15)", line=dict(width=0))
+                        # Stop Loss Box (Red for Short - Risk is Upwards)
+                        fig.add_shape(type="rect", x0=data.index[0], y0=t_entry, x1=data.index[-1], y1=t_sl, fillcolor="rgba(242, 54, 69, 0.15)", line=dict(width=0))
+                        # Lines & Labels
+                        fig.add_shape(type="line", x0=data.index[0], y0=t_entry, x1=data.index[-1], y1=t_entry, line=dict(color="#ff3344", width=2))
+                        fig.add_annotation(x=data.index[-1], y=t_tp, text=f"🎯 TP: {t_tp}", showarrow=False, xanchor="right", font=dict(color="#089981", size=11, family="Arial Black"), bgcolor="rgba(11,14,20,0.9)")
+                        fig.add_annotation(x=data.index[-1], y=t_sl, text=f"🛑 SL: {t_sl}", showarrow=False, xanchor="right", font=dict(color="#f23645", size=11, family="Arial Black"), bgcolor="rgba(11,14,20,0.9)")
+                        fig.add_annotation(x=data.index[5], y=t_entry, text=f"🔴 ACTIVE SHORT ({t_type})", showarrow=False, font=dict(color="#ff3344", size=10), bgcolor="rgba(11,14,20,0.9)")
+
+            # Render Chart
             fig.update_layout(
                 title=f"{ticker} Live Chart | Multi-Forecast Engine with Inline Matrix Customizer",
                 xaxis_title="Date/Time", template="plotly_dark",
@@ -376,23 +417,23 @@ else:
             )
             st.plotly_chart(fig, use_container_width=True)
 
+
             # --- EDITABLE SIGNAL TABLE ---
             st.markdown("---")
             st.write("### 📊 Live Actionable Signals & Custom Risk Matrix Editor")
-            st.info("💡 **How to use**: Double-click on any cell in **'Account Balance ($)'** or **'Risk (%)'** columns to input your desired values, then press **Enter**.")
+            st.info("💡 **How to see Position on Chart**: Look at the index number of any row in the table below, then input that number into the **'Active Trade Visualizer'** box inside the left Sidebar! It will automatically project TradingView style Long/Short boxes.")
             
             if trade_table_data:
-                df_base = pd.DataFrame(trade_table_data).drop_duplicates(subset=["Type", "Entry"]).sort_values(by="Signal Date", ascending=False)
-                
                 if "df_editable" not in st.session_state or st.session_state.get("current_ticker") != ticker:
                     df_base["Account Balance ($)"] = 1000.0
                     df_base["Risk (%)"] = 1.0
                     st.session_state.df_editable = df_base.copy()
                     st.session_state.current_ticker = ticker
                 
+                # පරිශීලකයාට පහසුවෙන් හඳුනාගැනීමට Index එකද සහිතව වගුව පෙන්වීම
                 edited_df = st.data_editor(
                     st.session_state.df_editable,
-                    hide_index=True,
+                    hide_index=False, # Index එක සක්‍රිය කරන ලදී (Visual Projection එක තෝරා ගැනීමට)
                     use_container_width=True,
                     disabled=["Type", "Signal Date", "Entry", "Stop Loss (SL)", "Take Profit (TP)", "Side"], 
                     column_order=["Type", "Signal Date", "Entry", "Stop Loss (SL)", "Take Profit (TP)", "Account Balance ($)", "Risk (%)"]
