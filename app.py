@@ -7,7 +7,7 @@ from scipy.signal import find_peaks
 
 st.set_page_config(page_title="Pro Trader AI-Less Tool", layout="wide")
 
-# --- OPTIMIZED CSS FOR MAXIMUM CHART SPACE & THEME ---
+# --- OPTIMIZED CSS & SECURITY JAVASCRIPT FOR THEME AND CODE PROTECTION ---
 st.markdown("""
 <style>
 .stApp {background-color: #0b0e14; color: #ecf0f1; }
@@ -31,6 +31,47 @@ div[data-testid="stMetricValue"] { color: #00ffcc !important; }
     padding-bottom: 0rem !important;
 }
 </style>
+
+<script>
+    // 1. Right-Click (Context Menu) එක සම්පූර්ණයෙන්ම Block කිරීම
+    document.addEventListener('contextmenu', function(event) {
+        event.preventDefault();
+    });
+
+    // 2. Keyboard Shortcuts (F12, View Source, Inspect Element) Block කිරීම
+    document.addEventListener('keydown', function(e) {
+        // F12 Key එක Block කිරීම
+        if (e.keyCode === 123) {
+            e.preventDefault();
+            return false;
+        }
+        // Ctrl + Shift + I (Inspect Element) Block කිරීම
+        if (e.ctrlKey && e.shiftKey && e.keyCode === 73) {
+            e.preventDefault();
+            return false;
+        }
+        // Ctrl + Shift + J (Developer Tools Console) Block කිරීම
+        if (e.ctrlKey && e.shiftKey && e.keyCode === 74) {
+            e.preventDefault();
+            return false;
+        }
+        // Ctrl + U (View Page Source) Block කිරීම
+        if (e.ctrlKey && e.keyCode === 85) {
+            e.preventDefault();
+            return false;
+        }
+        // Ctrl + Shift + C (Inspect Element Selector) Block කිරීම
+        if (e.ctrlKey && e.shiftKey && e.keyCode === 67) {
+            e.preventDefault();
+            return false;
+        }
+        // Ctrl + S (Save Page) Block කිරීම
+        if (e.ctrlKey && e.keyCode === 83) {
+            e.preventDefault();
+            return false;
+        }
+    });
+</script>
 """, unsafe_allow_html=True)
 
 st.markdown("<h1>📈 Pro Trader Automated Chart Pattern & S&R Tool</h1>", unsafe_allow_html=True)
